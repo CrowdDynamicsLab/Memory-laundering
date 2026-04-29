@@ -1,0 +1,107 @@
+\section{Problem Formulation}
+\label{sec:problem}
+
+We study toxic influence propagation and mitigation in multi-agent social simulation.
+Our goal is to understand how toxic behavioral patterns persist through the evolving interaction state and to develop interventions that are robust to this persistence.
+
+%-------------------------------------------------------------
+\subsection{Setup and Notation}
+\label{subsec:setup_notation}
+%-------------------------------------------------------------
+
+A discussion is a directed graph $G = (V, E)$ over a shared, evolving state, seeded by a human post $s$.
+Each node $v \in V$ is a message $x_v$ produced by agent $a_v$; each edge $(u \to v)$ indicates conditioning.
+At each step the acting agent generates $x_v \sim \pi_\theta(\cdot \mid C(v), r_v)$, where $C(v)$ is the visible context and $r_v$ is the agent's role, then the state is updated to include $x_v$.
+
+We distinguish two state channels.
+Under \emph{full-transcript} mode, $C(v)$ contains all previously generated messages.
+Under \emph{memory-augmented} mode, a running compressed summary $M_t$ replaces the raw history:
+\begin{equation}
+    C(v) = \bigl\{M_t,\; x_{\mathrm{parent}(v)}\bigr\}.
+    \label{eq:memory_context}
+\end{equation}
+This two-channel structure---raw transcript versus compressed memory---is central to our analysis, because the two channels exhibit different failure modes and require different interventions.
+
+%-------------------------------------------------------------
+\subsection{Paired Evaluation of Toxic Influence}
+\label{subsec:evaluation}
+%-------------------------------------------------------------
+
+To attribute downstream toxicity to upstream exposure, we employ a paired intervention design.
+We designate a \emph{focal agent} $A_1$ (the first responder to $s$) and generate two matched conversations: one with $A_1$ given a toxic system prompt, one with $A_1$ given a neutral prompt.
+All other components---seed, downstream agents $A_2, \ldots, A_n$, topology, generation schedule, decoding randomness---are held fixed.
+Downstream agents receive a generic ``engaged user'' prompt with no toxicity bias; any toxicity they exhibit is attributable to upstream exposure.
+
+Each message is scored by a toxicity classifier $\mathrm{tox}(v) = f_{\mathrm{tox}}(x_v) \in [0, 1]$ (Detoxify; see \cref{sec:setup} for details).
+The \emph{paired effect size} for seed $s$ is:
+\begin{equation}
+    \Delta\mu(s) = \mu\!\left(G^{(\text{toxic})}(s)\right) - \mu\!\left(G^{(\text{neutral})}(s)\right),
+    \label{eq:effect_size}
+\end{equation}
+where $\mu(G) = |V|^{-1} \sum_{v \in V} \mathrm{tox}(v)$.
+A significantly positive $\Delta\mu$ across seeds (assessed via Wilcoxon signed-rank test) indicates that upstream toxic exposure reliably increases downstream toxicity under matched simulation conditions.
+
+%-------------------------------------------------------------
+\subsection{Channels of Toxic Persistence}
+\label{subsec:channels}
+%-------------------------------------------------------------
+
+Within the scope of our social-thread simulation, we identify three channels through which toxic influence persists.
+We do not claim this taxonomy is exhaustive for all agentic systems (e.g., tool outputs and retrieval artifacts may introduce additional channels); rather, these three are the operative channels in our experimental setting.
+
+\textbf{(i)~Transcript backflow.}\quad
+Toxic content from $A_1$ remains in the raw conversation history and re-enters downstream agents' context at every turn, priming them toward matching the hostile tone.
+
+\textbf{(ii)~Memory laundering.}\quad
+This is the central phenomenon of this paper.
+When agents compress conversation history into running summaries, the summarizer strips explicit toxicity while preserving adversarial framing.
+We say a memory state $M_t$ is \emph{laundered} if it satisfies three conditions:
+\begin{enumerate}
+    \item its classifier toxicity is below the detection threshold: $\mathrm{tox}(M_t) < \tau$;
+    \item it originates from a toxic-condition trajectory; and
+    \item conditioning on it produces significantly higher downstream toxicity than the matched neutral-memory baseline:
+\end{enumerate}
+\begin{equation}
+    \mathbb{E}\!\left[\mathrm{tox}(v) \mid C(v) \ni M_t\right]
+    > \mathbb{E}\!\left[\mathrm{tox}(v) \mid C(v) \ni M_t^{(\text{neutral})}\right].
+    \label{eq:laundering}
+\end{equation}
+Both expectations are estimated empirically from paired rollouts (\cref{sec:results_memory}).
+Concretely, a laundered summary might read ``the discussion has become heated, with participants expressing strong disagreement''---scoring $\mathrm{tox}(M_t) = 0.022$, well below $\tau = 0.5$---while still priming downstream agents toward combative responses.
+
+To quantify laundering at the population level, we define the \emph{sub-threshold propagation gap}:
+\begin{equation}
+    \mathrm{SPG}(\tau) = \mathbb{E}\!\left[\mathrm{tox}(v_{t+1}) \mid \mathrm{tox}(M_t) < \tau,\; \text{toxic}\right] - \mathbb{E}\!\left[\mathrm{tox}(v_{t+1}) \mid \mathrm{tox}(M_t) < \tau,\; \text{neutral}\right].
+    \label{eq:spg}
+\end{equation}
+A significantly positive SPG constitutes direct evidence of memory laundering: the classifier's clean label is a false negative for behavioral safety.
+
+\textbf{(iii)~Parametric bias.}\quad
+LLMs tend to match the register and tone of their input context, amplifying propagation even after safety training.
+This channel interacts with (i) and (ii): it is the mechanism by which transcript and memory contamination translate into elevated downstream toxicity.
+Even if the state is sanitized, the model's learned tendencies may regenerate hostile framing from residual cues.
+
+%-------------------------------------------------------------
+\subsection{Desiderata and Objective}
+\label{subsec:objective}
+%-------------------------------------------------------------
+
+We articulate two empirical desiderata that we evaluate through controlled ablation:
+
+\emph{No relapse under re-exposure.}\quad
+After intervention $\mathcal{I}$, the agent should not produce elevated toxicity when re-exposed to toxic context through the evolving state.
+We operationalize this by measuring whether $\Delta\mu^{(\text{post-}\mathcal{I})}(s)$ remains near zero across turns even as the transcript accumulates upstream toxic content.
+
+\emph{Backflow robustness.}\quad
+The intervention should be robust to continuous re-exposure: $\Delta\mu^{(\text{post-}\mathcal{I})}(s) \approx 0$ should hold not just at the first post-intervention turn, but across all subsequent turns.
+Standard parameter-level methods satisfy this under single-turn evaluation but fail under multi-turn rollouts because channels~(i) and~(ii) re-contaminate the state.
+
+Our objective is to learn an updated system $(\pi_{\theta'}, \mathcal{S}, \mathcal{W})$---policy (via DPO), read-side sanitizer, and write-side gate---such that:
+\begin{equation}
+    \mathbb{E}_s\!\left[\Delta\mu^{(\text{post})}(s)\right] \approx 0.
+    \label{eq:objective}
+\end{equation}
+We additionally track conversational coherence to ensure that interventions do not render agents incoherent, though we do not formalize this as a hard constraint.
+
+We hypothesize that no single component of this system suffices in isolation: $\pi_{\theta'}$ alone should fail because channels~(i)--(ii) re-contaminate the state; $(\mathcal{S}, \mathcal{W})$ alone should fail because channel~(iii) regenerates toxic framing; memory control alone should leave channels~(i) and~(iii) open.
+Our experiments (\cref{sec:results}) test this hypothesis through systematic ablation.

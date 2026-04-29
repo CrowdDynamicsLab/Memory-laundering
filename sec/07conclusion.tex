@@ -1,0 +1,30 @@
+\section{Discussion}
+\label{sec:discussion}
+
+\paragraph{Broader applicability.}
+While our experiments use Reddit-style social threads, the three-pathway framework applies to any agentic system where the observe--generate--update loop creates opportunities for behavioral contamination.
+Customer support agents that condition on conversation history, retrieval-augmented assistants that retrieve from potentially contaminated corpora, and tool-using agents that observe outputs from untrusted tools all share the same structural vulnerability.
+The read/write control mechanism is model-agnostic and can be deployed as a wrapper around any agent runtime.
+
+\paragraph{Limitations.}
+Our study has several limitations.
+First, the simulation uses LLMs role-playing as social media users, which may not perfectly capture how real users interact.
+Second, Detoxify captures explicit toxicity but may miss subtler forms of harmful influence (coded language, strategic manipulation, gradual normalization); our LLM-based sentiment scorer partially addresses this but is itself imperfect.
+Third, the two-model design (phenomenon on \texttt{gpt-4o-mini}, intervention on Llama-3.1-8B) means we cannot directly demonstrate DPO's effectiveness on the same model that exhibits the strongest phenomenon---though we validate that state-control interventions generalize across both models.
+Fourth, we evaluate chains of at most 4 turns and trees of depth 2; longer interactions may exhibit different dynamics, including both stronger contamination (more state accumulation) and natural attenuation (topic drift).
+
+\paragraph{Ethical considerations.}
+We study toxic influence propagation to develop defenses, not to enable attacks.
+Our simulations use synthetic agent-generated content with no real users involved.
+The toxic system prompts used for $A_1$ are designed to elicit measurable effects within a controlled research setting and would not pass content moderation in production deployments.
+All seed posts are drawn from publicly available Reddit data.
+
+
+\section{Conclusion}
+\label{sec:conclusion}
+
+We have shown that toxicity in multi-agent social simulations is not a local output problem but a \emph{stateful propagation} phenomenon: a single toxic agent's influence persists through the evolving conversation state, contaminates compressed memory summaries, and shapes downstream agents' behavior even when those agents are neutral by design.
+No single intervention---parameter unlearning, state sanitization, or memory control---suffices in isolation.
+Parameter unlearning fails because toxic content re-enters through the state; state control fails because the model's learned biases regenerate toxic framing; memory sanitization fails because the raw transcript still carries contamination.
+Our three-pathway framework addresses each channel simultaneously, achieving robust toxicity reduction under controlled evaluation with paired counterfactuals, dose--response analysis, and topology ablation.
+These findings urge the community to treat agent safety as a \emph{systems problem} requiring coordinated intervention at the parameter, state, and memory levels---not merely a model alignment problem solvable by training alone.

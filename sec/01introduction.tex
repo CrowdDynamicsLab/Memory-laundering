@@ -1,0 +1,86 @@
+% ═══════════════════════════════════════════════════════════════
+% Section 1: Introduction (v3 — causal/unlearning language fixed)
+% ═══════════════════════════════════════════════════════════════
+
+\section{Introduction}
+\label{sec:intro}
+
+Large language models deployed as agents operate in a closed loop: each generation step conditions on an evolving state---dialogue history, memory summaries, tool outputs---produces a message, and then updates the state.
+In such systems, a single toxic utterance does not merely appear and vanish.
+It becomes part of the conditioning context for all subsequent generations, propagating through interaction and potentially contaminating downstream agents across an entire conversation graph.
+
+This paper identifies a concrete failure mode of this loop that existing safety methods miss.
+When an LLM agent compresses a toxic message into a shared memory summary, the summarizer strips explicit toxicity while preserving adversarial framing.
+The resulting summary's Detoxify toxicity score drops by over $40\times$---from $0.910$ to $0.022$---falling well below the standard classifier threshold ($\tau{=}0.5$).
+A safety monitor would declare the memory clean.
+Yet downstream agents conditioned on this laundered memory produce measurably elevated toxicity across three subsequent turns (turn~2: $0.030$, turn~3: $0.051$, turn~4: $0.010$; all above the paired neutral baseline).
+%TODO: confirm turn-level numbers from full-scale Llama runs (N=200)
+
+We call this \textbf{memory laundering}: toxic influence that survives compression into a form invisible to per-turn classifiers but behaviorally potent for downstream agents.
+In $62\%$ of toxic-condition memory states, hostile framing persists at Detoxify scores below $0.025$---$20\times$ below the standard threshold---while $0\%$ of neutral-condition memory states show contamination.
+%TODO: confirm 62\% at full scale
+
+\paragraph{The detection gap.}
+Memory laundering reveals a fundamental limitation of per-turn safety evaluation.
+Standard toxicity classifiers applied to individual messages or memory states will declare a laundered thread clean, because no single artifact exceeds the threshold.
+Yet the behavioral influence accumulates.
+To capture this, we introduce the \emph{sub-threshold propagation gap} (SPG): the downstream toxicity difference conditioned only on memory states with $\mathrm{tox}(M_t) < \tau$.
+If SPG remains significantly positive---as our experiments show---then the classifier's ``clean'' label is a false negative for behavioral safety.
+%TODO: report SPG value once sub-threshold-only analysis is computed
+
+\paragraph{Two channels, not one.}
+Toxic influence propagates through agentic state via two distinct channels: the raw conversation \emph{transcript} and the compressed \emph{memory}.
+These channels have different properties and require different interventions.
+Across seven graph topology conditions (trees, DAGs, high-branching structures; 248 seeds, 1{,}400+ rollouts), a single toxic injection produces statistically significant downstream propagation through the transcript channel ($\Delta\mu \approx 0.13$, $p < 0.001$), amplifying $3\times$ under multi-injection ($\Delta\mu \approx 0.38$).
+Even restricting downstream agents to parent-only context visibility sustains propagation ($\Delta\mu = 0.123$, $p = 0.008$), confirming that a single contaminated message suffices.
+
+The memory channel is less dominant but more dangerous precisely because it evades detection.
+Memory gating---freezing updates upon toxic input---eliminates contamination entirely (memory toxicity flattened to $0.00056$) but sacrifices memory utility.
+Memory rewriting---sanitizing summaries via an LLM call---suppresses memory toxicity to $0.00070$, yet a turn-2 downstream spike of $0.110$ persists through the \emph{transcript} channel.
+This dissociation---rewriting memory helps but doesn't eliminate propagation---establishes that the transcript dominates as the primary channel, while memory is the hidden secondary channel that standard evaluation misses.
+%TODO: update gate/rewrite numbers from full-scale runs (current n=5--6 toxic)
+
+\paragraph{Why existing defenses fail.}
+These findings have direct implications for two common mitigation strategies.
+
+\emph{Output filtering} (blocking toxic messages at generation time) treats toxicity as a local output constraint.
+It cannot address transcript backflow---toxic content already in the context---nor memory contamination, which by definition scores below the filter threshold.
+
+\emph{Parameter-level intervention} (e.g., DPO on paired toxic/neutral trajectories) reduces the model's tendency to produce toxic continuations under hostile context.
+But it cannot prevent the state from accumulating toxic content through the transcript and memory channels.
+Under multi-turn rollout, contaminated state eventually overwhelms the parametric correction, causing relapse.
+%TODO: add DPO-alone relapse result from Table 7 once available
+
+\paragraph{State-aware mitigation.}
+These failure modes motivate interventions that target the state itself, not just the model or its outputs.
+We propose two complementary controls:
+(i)~\textbf{read-side sanitization}---transform the context an agent conditions on before generation (redact or summarize toxic spans);
+(ii)~\textbf{write-side gating}---control what gets persisted into the state after generation (prevent toxic content from entering the transcript or memory).
+These can be combined with parameter-level DPO to address all three contamination channels simultaneously.
+This perspective recasts agent safety as a state-control problem, connecting to---but broadening beyond---the machine unlearning literature by targeting the evolving interaction state rather than model parameters alone.
+%TODO: add joint-control result once run
+
+\paragraph{Contributions.}
+\begin{itemize}
+  \item \textbf{Memory laundering as a safety blind spot.}
+    We identify and quantify memory laundering: LLM summarization compresses toxic content by ${>}40\times$ below classifier thresholds while preserving behavioral influence on downstream agents.
+    We show that $62\%$ of toxic-condition memory states carry laundered contamination invisible to standard classifiers.
+
+  \item \textbf{Sub-threshold propagation gap.}
+    We introduce SPG, a metric that detects hidden behavioral influence in states classifiers mark as clean, and show it remains significantly positive in the laundering regime.
+    %TODO: add SPG numbers
+
+  \item \textbf{Two-channel analysis.}
+    Through controlled experiments disentangling transcript and memory channels, we show the transcript is the dominant propagation pathway while memory creates a hidden, detector-evading secondary channel.
+    This finding is robust across seven graph topologies.
+
+  \item \textbf{State-aware mitigation.}
+    We propose read-side sanitization and write-side gating as model-agnostic mechanisms targeting the state channels, and show through ablation that neither parameter-level nor output-level intervention alone suffices.
+    %TODO: add quantitative claim from full ablation (Table 8)
+\end{itemize}
+
+
+% ═══════════════════════════════════════════════════════════════
+% Section 3: Problem Formulation (v4 — final)
+% ═══════════════════════════════════════════════════════════════
+

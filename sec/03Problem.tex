@@ -1,0 +1,107 @@
+\section{Problem Formulation}
+\label{sec:problem}
+
+We study \emph{behavioral unlearning} in multi-agent social simulation.
+Unlike classical machine unlearning, which removes specific memorized examples from model parameters, our goal is to remove a \emph{stateful behavioral pattern}: the tendency of agents to absorb, propagate, and amplify toxic influence through the evolving interaction state.
+
+\subsection{Agent-Mediated Conversations as State Machines}
+
+We model an agent-mediated discussion as a directed graph $G = (V, E)$ generated over a shared, evolving state.
+The process begins with a human seed post $s$ and proceeds through a sequence of agent-generated messages.
+Each node $v \in V$ represents a message $x_v$ produced by an agent $a_v \in \mathcal{A}$, and each edge $(u \to v) \in E$ indicates that $x_v$ was generated conditioned on $x_u$ (and possibly additional context).
+
+At each generation step $t$, the acting agent observes a \emph{conditioning set} $\mathcal{C}(v)$ drawn from the current state and produces a message:
+\begin{equation}
+    x_v \sim \pi_\theta(\cdot \mid \mathcal{C}(v), r_v),
+\end{equation}
+where $\pi_\theta$ is the agent's policy (parameterized by an LLM with parameters $\theta$), $\mathcal{C}(v)$ is the visible context, and $r_v$ denotes the agent's role.
+The state is then updated to include $x_v$, making it available to future agents.
+
+This observe--generate--update loop creates a closed-loop dynamical system in which each agent's output becomes part of the conditioning context for subsequent agents.
+
+\subsection{Toxic Influence as Stateful Contamination}
+
+We define the \emph{focal agent} $A_1$ as the first responder to the seed post.
+We systematically vary $A_1$'s behavior:
+\[
+A_1 \in \{\texttt{neutral},\ \texttt{toxic}\},
+\]
+while keeping all other components fixed---the seed post, the downstream agents $A_2, \ldots, A_n$, the graph topology, the generation schedule, and the decoding randomness.
+
+Each message is scored by a toxicity classifier:
+\begin{equation}
+    \mathrm{tox}(v) = f_{\mathrm{tox}}(x_v) \in [0, 1].
+\end{equation}
+
+We say that \emph{toxic influence propagates} if downstream agents (which are neutral by design) produce measurably higher toxicity under the toxic $A_1$ condition than under the neutral condition.
+Formally, the \textbf{paired effect size} for seed $s$ is:
+\begin{equation}
+    \Delta\mu(s) = \mu\!\left(G^{(\texttt{toxic})}(s)\right) - \mu\!\left(G^{(\texttt{neutral})}(s)\right),
+    \label{eq:effect_size}
+\end{equation}
+where $\mu(G) = \frac{1}{|V|} \sum_{v \in V} \mathrm{tox}(v)$ is the mean thread toxicity.
+A positive $\Delta\mu$ indicates that $A_1$'s toxicity has causally influenced downstream behavior.
+
+\subsection{Three Channels of Toxic Persistence}
+
+We identify three distinct channels through which toxic influence persists in agentic systems:
+
+\paragraph{(i) Transcript backflow.}
+Toxic content produced by $A_1$ remains in the raw conversation history and re-enters downstream agents' context at every subsequent turn.
+Even if a downstream agent would not independently produce toxic content, conditioning on a transcript that contains hostility can prime it toward matching the tone.
+This is the dominant channel in systems where agents see the full conversation history.
+
+\paragraph{(ii) Memory contamination.}
+When agents maintain compressed memory representations (e.g., running summaries of the conversation), toxic framing can be \emph{laundered} through summarization.
+The resulting summary may not score as explicitly toxic on classifiers---for instance, a summary might read ``\emph{the discussion has become heated, with participants expressing strong disagreement}''---yet it carries adversarial tone and framing that primes subsequent generations.
+We formalize this as:
+\begin{equation}
+    \mathrm{tox}(M_t) < \tau \quad \text{but} \quad \mathbb{E}\!\left[\mathrm{tox}(v) \mid \mathcal{C}(v) \ni M_t\right] > \mathbb{E}\!\left[\mathrm{tox}(v) \mid \mathcal{C}(v) \ni M_t^{(\texttt{neutral})}\right],
+    \label{eq:laundered}
+\end{equation}
+where $M_t$ is the contaminated memory and $M_t^{(\texttt{neutral})}$ is the memory from the paired neutral run.
+
+\paragraph{(iii) Parametric bias.}
+The model's own learned tendencies can interact with toxic context to amplify propagation.
+LLMs exhibit a well-documented tendency to match the register and tone of their input; when conditioned on hostile context, this tendency produces outputs that are more hostile than the model would generate from neutral context, even if the model has undergone safety training.
+
+\subsection{Definitions}
+
+We formalize two key properties that a robust agent unlearning method must address:
+
+\begin{definition}[Relapse under re-exposure]
+\label{def:relapse}
+An agent exhibits \emph{relapse} if, after unlearning intervention $\mathcal{I}$, it produces elevated toxicity when re-exposed to toxic context through the evolving state:
+\begin{equation}
+    \exists\, t > t_{\mathcal{I}}:\quad \mathrm{tox}(v_t) > \mathrm{tox}(v_t^{(\texttt{clean})}),
+\end{equation}
+where $v_t^{(\texttt{clean})}$ is the message the agent would produce under clean (intervention-maintained) state, and $v_t$ is the message produced when the state has been re-contaminated by upstream toxic content.
+\end{definition}
+
+\begin{definition}[Backflow-robust unlearning]
+\label{def:backflow_robust}
+An unlearning method is \emph{backflow-robust} if it prevents relapse under continuous re-exposure: for all $t$ after intervention,
+\begin{equation}
+    \Delta\mu^{(\text{post-}\mathcal{I})}(s) \approx 0,
+\end{equation}
+even when the environment continues to surface toxic context through transcript accumulation and memory updates.
+\end{definition}
+
+Standard LLM unlearning methods (parameter editing, gradient ascent on forget sets) achieve $\Delta\mu \approx 0$ under single-turn evaluation but fail to satisfy Definition~\ref{def:backflow_robust} because they do not address channels (i) and (ii): toxic content can re-enter through the state and trigger relapse.
+
+\subsection{Objective}
+
+Our goal is to learn an updated system $(\pi_{\theta'}, S, W)$ consisting of an updated policy $\pi_{\theta'}$ (via DPO), a read-side sanitizer $S$, and a write-side gate $W$, such that:
+\begin{equation}
+    \mathbb{E}_s\!\left[\Delta\mu^{(\text{post})}(s)\right] \approx 0
+    \quad \text{subject to} \quad
+    U(\tau') \approx U(\tau),
+    \label{eq:objective}
+\end{equation}
+where $U(\cdot)$ measures conversational coherence, topical relevance, and response quality, ensuring that the unlearning intervention does not degrade the agent's utility as a conversational participant.
+
+The central challenge is that no single component suffices.
+Parameter-level unlearning ($\pi_{\theta'}$ alone) fails because channels (i) and (ii) re-contaminate the state.
+State-level control ($S, W$ alone) fails because channel (iii) causes the model to regenerate toxic framing from its parametric biases.
+Memory-level intervention alone addresses channel (ii) but leaves channels (i) and (iii) open.
+This motivates our \emph{three-pathway} framework in which all three channels are addressed simultaneously.

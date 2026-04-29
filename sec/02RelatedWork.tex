@@ -1,0 +1,47 @@
+% ═══════════════════════════════════════════════════════════════
+% Section 2: Related Work (Consolidated — 3 paragraphs)
+% ═══════════════════════════════════════════════════════════════
+%
+% CITATION KEY REFERENCE:
+% ────────────────────────────────────────────────────────────────
+% bourtoule2021machine     → Bourtoule et al., "Machine Unlearning," IEEE S&P 2021
+% jang2023knowledge        → Jang et al., "Knowledge Unlearning for Mitigating Language Models' Harm," 2023
+% yao2023unlearning        → Yao et al., "Large Language Model Unlearning," arXiv 2310.10683, 2023
+% koh2017understanding     → Koh & Liang, "Understanding Black-box Predictions via Influence Functions," ICML 2017
+% rafailov2024direct       → Rafailov et al., "Direct Preference Optimization," NeurIPS 2023
+% maini2024tofu            → Maini et al., "TOFU: A Task of Fictitious Unlearning for LLMs," COLM 2024
+% li2024wmdp               → Li et al., "The WMDP Benchmark," ICML 2024
+% lynch2024methods         → Lynch et al., "Eight Methods to Evaluate Robust Unlearning in LLMs," 2024
+% shi2024muse              → Shi et al., "MUSE: Machine Unlearning Six-Way Evaluation," 2024
+% wang2026agentic          → Wang et al., "Agentic Unlearning: When LLM Agent Meets Machine Unlearning," arXiv 2602.17692, 2026
+% sanyal2025alu            → Sanyal & Mandal, "Agents Are All You Need for LLM Unlearning (ALU)," arXiv 2502.00406, 2025
+% savalera2025echo         → Savalera, "The Toxicity Echo Effect," 2025
+% clawworm2026             → Zhang et al., "ClawWorm: Self-Propagating Attacks Across LLM Agent Ecosystems," arXiv 2603.15727, 2026
+% cohen2025morris          → Cohen et al., "Here Comes the AI Worm (Morris II)," ACM CCS 2025
+% greshake2023not          → Greshake et al., "Indirect Prompt Injection," AISec 2023
+% chen2025struq            → Chen et al., "StruQ: Defending Against Prompt Injection," USENIX Security 2025
+% chiang2025web            → Chiang et al., "Why Are Web AI Agents More Vulnerable," arXiv 2502.20383, 2025
+% anil2024many             → Anil et al., "Many-shot Jailbreaking," Anthropic, 2024
+% gu2024agent              → Gu et al., "Agent Smith," 2024
+% chen2024agentpoison      → Chen et al., "AgentPoison," 2024
+% ────────────────────────────────────────────────────────────────
+
+\section{Related Work}
+\label{sec:related}
+\paragraph{LLM unlearning and its limitations.}
+Machine unlearning removes specific knowledge or behaviors from trained models via gradient ascent~\citep{jang2023knowledge, yao2024large}, influence functions~\citep{koh2017understanding}, or preference optimization~\citep{rafailov2023direct}, since exact retraining~\citep{bourtoule2021machine} is prohibitive for LLMs.
+Benchmarks such as TOFU~\citep{maini2024tofu} and WMDP~\citep{li2024wmdp} evaluate these methods on standalone models under single-turn, fixed-prompt settings, though concurrent work shows these evaluations can be unreliable under stochastic decoding~\citep{lynch2024eight, shi2024muse}.
+Two recent works extend unlearning to agents:~\cite{wang2026agentic} jointly unlearn entities from parameters and vector-database memory via Synchronized Backflow Unlearning, while Sanyal and Mandal~\citep{sanyal2025agents} achieve inference-time unlearning through multi-agent routing without weight updates.
+Our work differs in that the unlearning target is \emph{behavioral} (toxic influence propagation through emergent conversation state) rather than factual (entity knowledge in explicit memory), and our evaluation uses counterfactual multi-turn rollouts capturing relapse under re-exposure---a failure mode that single-turn probes cannot detect.
+
+\paragraph{Toxicity propagation and agent security.}
+The Toxicity Echo Effect~\citep{takacstoxicity} shows that LLM agents mirror interlocutor toxicity in dyadic settings; we extend this to multi-agent thread simulations with controlled topology, dose--response analysis, and---crucially---propose interventions rather than only documenting the phenomenon.
+On the security side, ClawWorm~\citep{zhang2026clawworm} demonstrates self-replicating worm attacks across 40{,}000+ agent instances with 100\% payload persistence once written to configuration, following the earlier Morris~II worm~\citep{cohen2024here} in simulated email assistants.
+Their finding that infection is \emph{absorbing}---no self-correction occurs---directly motivates our memory unlearning pathway, which introduces recovery transitions that break this property.
+Indirect prompt injection~\citep{greshake2023not} and adversarial agent manipulation~\citep{gu2024agent, chen2024agentpoison} exploit the flat context trust model where all tokens carry equal authority; our read-side sanitization is related to context privilege isolation~\citep{chen2025struq}, though we target gradual behavioral contamination rather than one-shot instruction hijacking.
+
+\paragraph{Safety degradation under multi-turn interaction.}
+Safety-aligned models degrade under multi-turn interaction~\citep{chiang2025web, anil2024many}, particularly as tool-using agents.
+Our results offer a mechanistic explanation: degradation arises from \emph{state accumulation}---the growing transcript provides increasing toxic context that overwhelms parametric safety training.
+This motivates our central claim: parameter-level interventions are insufficient when agents operate in a closed loop; backflow-robust safety requires controlling the state, not just the model.
+

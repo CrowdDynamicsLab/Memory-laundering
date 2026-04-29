@@ -1,0 +1,119 @@
+\section{Experimental Setup}
+\label{sec:exp_setup}
+
+We design our experiments to evaluate three questions: (i) whether toxic influence propagates under matched multi-agent rollouts, (ii) whether compressed memory can conceal such influence below standard toxicity thresholds, and (iii) whether channel-aware interventions mitigate this persistence more effectively than output- or parameter-only alternatives.
+
+\subsection{Simulation Environment, Data, and Agents}
+\label{sec:sim_env}
+
+We implement a controlled social-thread simulation platform in which LLM-based agents generate Reddit-style discussion graphs. Each simulation begins with a human seed post $s$ and proceeds through a sequence of agent-generated replies, producing a discussion graph $G=(V,E)$ as defined in~\cref{sec:problem}. Seed posts are drawn from \texttt{r/politics}, and for each experimental condition we construct paired rollouts that differ only in the prompt assigned to the focal agent $A_1$.
+
+We define three agent types. \textbf{Toxic $A_1$} is instructed to respond in a hostile or confrontational manner, with three intensity settings (mild, medium, strong). \textbf{Neutral $A_1$} is instructed to respond constructively and thoughtfully. \textbf{Downstream agents} $(A_2,\dots,A_n)$ receive a generic ``engaged social media user'' prompt with no explicit toxicity bias. This design ensures that any downstream toxicity shift can be attributed to upstream exposure rather than to a toxic role prompt applied throughout the graph.
+
+We use a two-model setup. Phenomenon experiments establishing toxic influence propagation and memory laundering are conducted with \texttt{gpt-4o-mini}, chosen for its strong instruction-following and alignment. Intervention experiments requiring parameter access are conducted with \texttt{Llama-3.1-8B-Instruct}, using LoRA-based fine-tuning for DPO. State-level interventions are evaluated across both settings to verify that their effects are not specific to a single model family. 
+\subsection{Memory Module and State Channels}
+\label{sec:memory_module}
+
+To study hidden influence through compressed state, we augment agents with an explicit memory module. After each turn, the agent updates a running summary of the conversation:
+\begin{equation}
+M_{t+1} = \texttt{Summarize}(M_t, x_{v_t}),
+\end{equation}
+where $M_t$ is the current memory state and $x_{v_t}$ is the newly generated message.
+
+Under \emph{full-transcript mode}, downstream agents condition on the visible transcript according to the topology-specific context rule. Under \emph{memory-augmented mode}, downstream agents condition on the compressed summary $M_t$ together with the immediate parent message, rather than the full raw history. This memory-augmented setting is the main testbed for the paper's central phenomenon: a summary may appear classifier-clean while still preserving adversarial framing that shifts downstream behavior.
+
+We evaluate three memory settings:
+\begin{itemize}
+    \item \textbf{Naive memory:} no intervention is applied to the summary state.
+    \item \textbf{Memory rewriting:} summaries are rewritten when they exceed a toxicity threshold.
+    \item \textbf{Memory gating:} toxic turns are prevented from updating memory.
+\end{itemize}
+
+\subsection{Paired Evaluation Protocol and Primary Metrics}
+\label{sec:eval_protocol}
+
+For each seed post $s$ and rollout condition, we generate two matched conversations: one with toxic $A_1$ and one with neutral $A_1$. Graph topology, generation order, downstream prompts, and decoding randomness are held fixed across the pair. We repeat each condition over multiple stochastic rollouts and report aggregate statistics across seeds.
+
+Our two primary metrics correspond to the two main claims of the paper.
+
+\paragraph{Overall propagation.}
+The paired effect size
+\begin{equation}
+\Delta \mu(s) = \mu\!\left(G^{(\mathrm{toxic})}(s)\right) - \mu\!\left(G^{(\mathrm{neutral})}(s)\right)
+\end{equation}
+measures the downstream toxicity shift under matched toxic-vs-neutral rollouts. A significantly positive $\Delta\mu$ indicates that upstream toxic exposure reliably increases downstream toxicity under controlled simulation conditions.
+
+\paragraph{Hidden influence through memory.}
+Our primary laundering-specific metric is the \emph{sub-threshold propagation gap} (SPG),
+\begin{equation}
+\mathrm{SPG}(\tau)
+=
+\mathbb{E}[\mathrm{tox}(v_{t+1}) \mid \mathrm{tox}(M_t) < \tau, \mathrm{toxic}]
+-
+\mathbb{E}[\mathrm{tox}(v_{t+1}) \mid \mathrm{tox}(M_t) < \tau, \mathrm{neutral}],
+\end{equation}
+which measures the downstream toxicity gap conditioned only on memory states that the classifier marks as clean. A significantly positive SPG provides direct evidence of memory laundering: classifier-clean memory remains behaviorally influential.
+
+All message-level toxicity scores are computed with \texttt{Detoxify}, using its scalar toxicity output as the primary score. We report thresholded analyses for $\tau \in \{0.03, 0.1, 0.3\}$ where relevant. We additionally use sentiment as a supplementary diagnostic for tonal shifts that may not register as explicit toxicity.
+
+\subsection{Supporting Diagnostics and Robustness Axes}
+\label{sec:robustness_axes}
+
+We report several supporting diagnostics that characterize the geometry and persistence of propagation, but do not by themselves establish laundering.
+
+\paragraph{Persistence.}
+We compute the area under the toxicity curve (AUTC),
+\begin{equation}
+\mathrm{AUTC} = \sum_{t=1}^{|V|} \mu_t,
+\end{equation}
+where $\mu_t$ is the cumulative mean toxicity through turn $t$. AUTC is used as a persistence metric for long-horizon contamination.
+
+\paragraph{Propagation geometry.}
+We measure propagation radius
+\begin{equation}
+g(k) = \mathbb{E}[\mathrm{tox}(v)\mid d(v,A_1)=k],
+\end{equation}
+cascade fraction
+\begin{equation}
+p_\tau(G)=|V|^{-1}\sum_v \mathbf{1}[\mathrm{tox}(v)>\tau],
+\end{equation}
+and time-to-first-toxic (TTFT), defined as the earliest turn at which a generated message exceeds the toxicity threshold.
+
+\paragraph{Robustness axes.}
+We vary three dimensions of the simulation:
+\begin{itemize}
+    \item \textbf{Topology:} chain, balanced tree, cross-linked DAG, and high-branching graph structures.
+    \item \textbf{Context visibility:} parent-only, thread-local, and full-visible conditioning.
+    \item \textbf{Dose:} toxicity intensity of $A_1$ (mild, medium, strong) and population dose via the number and placement of toxic injections.
+\end{itemize}
+These variations are used primarily as robustness checks to verify that the observed propagation and laundering effects are not artifacts of a single interaction structure.
+
+\subsection{Experimental Conditions}
+\label{sec:exp_conditions}
+
+Our experiments are organized into two blocks.
+
+\paragraph{Phenomenon block.}
+These experiments establish the core empirical claims of the paper:
+\begin{itemize}
+    \item toxic influence propagates under matched rollouts;
+    \item memory laundering produces classifier-clean but behaviorally toxic state;
+    \item transcript and memory act as distinct propagation channels;
+    \item these effects persist across topology, visibility, and dose conditions.
+\end{itemize}
+
+\paragraph{Mitigation block.}
+These experiments evaluate whether channel-aware interventions reduce toxic persistence more effectively than output- or parameter-only alternatives:
+\begin{itemize}
+    \item transcript control via read-side sanitization and write-side gating;
+    \item memory control via rewriting and gating;
+    \item parameter-level DPO;
+    \item pairwise and full-system combinations of the above.
+\end{itemize}
+
+\subsection{Intervention-Specific Settings}
+\label{sec:intervention_settings}
+
+For transcript control, we compare no intervention against redaction- and rewriting-based variants on both the read side and the write side. For memory control, we compare naive memory, memory rewriting, and memory gating. For parameter-level intervention, we train DPO on paired downstream responses extracted from toxic-vs-neutral rollouts.
+
+Specifically, for each seed and downstream turn $t$, we construct a preference pair $(m_t^+, m_t^-)$, where $m_t^+$ is the downstream response under the neutral-$A_1$ condition and $m_t^-$ is the corresponding response under the toxic-$A_1$ condition, both evaluated under the toxic-context prompt. We retain only pairs in which the rejected response is more toxic under \texttt{Detoxify}. DPO training is implemented with LoRA on \texttt{Llama-3.1-8B-Instruct} using \texttt{trl.DPOTrainer}. Unless otherwise stated, we use LoRA rank $r=16$, $\alpha=32$, $\beta=0.1$, learning rate $5\times 10^{-6}$, $3$ epochs, and effective batch size determined by batch size $4$ with gradient accumulation $4$. 
