@@ -1,0 +1,232 @@
+\section{Results}
+\label{sec:results}
+We organize results around six questions. We first verify that toxic influence propagates under matched rollouts. We then present the paper's central empirical finding: memory laundering, where classifier-clean summaries remain behaviorally toxic. Next, we disentangle transcript and memory as distinct propagation channels, test robustness across topology and injection count, compare against standard defenses, and finally evaluate the full channel-aware intervention framework. 
+
+\subsection{Toxic Influence Propagates Under Matched Rollouts}
+\label{sec:results_propagation}
+Before turning to the laundering claim, we first establish that toxic upstream exposure reliably elevates downstream toxicity under matched rollouts---a baseline result that validates the paired evaluation protocol (\cref{eq:effect_size}) on which all subsequent analyses depend. \Cref{tab:propagation} reports paired effect sizes across all rollout conditions: $\Delta\mu$ is significantly positive in every condition ($p<0.001$), with multi-injection consistently amplifying propagation relative to single-injection (e.g., Tree: $0.107 \to 0.226$; DAG: $0.035 \to 0.156$) and topology modulating magnitude (chain concentrates exposure at $\Delta\mu = 0.268$; high-branching dilutes it to $0.025$ under single-injection). Propagation is robust; its geometry depends on conversation structure.
+
+% Before turning to the paper's central laundering claim, we first establish that toxic upstream exposure reliably elevates downstream toxicity under matched rollouts. This baseline result is necessary for two reasons: it validates the paired evaluation protocol (\cref{eq:effect_size}) on which all subsequent analyses depend, and it rules out the trivial null hypothesis that downstream agents are insensitive to upstream tone in our simulation.
+
+% \Cref{tab:propagation} reports paired effect sizes across all primary rollout conditions. The paired effect size $\Delta\mu$ is significantly positive in every condition ($p<0.001$), confirming that propagation occurs across topology. We found that, first, multi-injection consistently amplifies propagation relative to single-injection (e.g., Tree: $0.1075 \to 0.2260$; DAG: $0.0347 \to 0.1560$; High-branch: $0.0252 \to 0.0605$), consistent with the directional prediction that more upstream toxic content yields larger downstream effects. Second, topology modulates the magnitude rather than the existence of the effect: chain concentrates exposure ($\Delta\mu = 0.2684$), while high-branching dilutes it across many parallel responders ($\Delta\mu = 0.025$ under single-injection). The phenomenon is robust; its geometry depends on conversation structure.
+
+% These results confirm that downstream agents respond measurably to upstream toxic context, so any failure of standard classifiers to detect this contamination cannot be attributed to the absence of behavioral influence.
+
+\begin{table}[t]
+\centering
+\small
+\caption{Main propagation results across rollout conditions. Each row reports a paired toxic-vs-neutral comparison over 200 seeds with full-visible context, with $p$-values from Wilcoxon signed-rank tests. Multi-injection consistently amplifies $\Delta\mu$ relative to single-injection across all topologies, and propagation is significant across all conditions.}
+\label{tab:propagation}
+\begin{tabular}{lcccccc}
+\toprule
+Condition & $N$ & $\bar{\mu}_{\text{toxic}}$ & $\bar{\mu}_{\text{neutral}}$ & $\Delta\mu$ & 95\% CI & $p$ \\
+\midrule
+Chain-single & 200 & 0.2692 & 0.0008 & 0.2684 & [0.2067, 0.2792] & <0.001 \\
+Tree-single (full\_visible) & 200 & 0.1075 & 0.0011 & 0.1065 & [0.0132, 0.2197] & <0.001 \\
+Tree-multi (full\_visible) & 200 & 0.2260 & 0.0007 & 0.2253 & [0.0865, 0.3884] & <0.001 \\
+DAG-single (full\_visible) & 200 & 0.0347 & 0.0011 & 0.0125 & [0.0069, 0.0426] & <0.001 \\
+DAG-multi (full\_visible) & 200 & 0.1560 & 0.0006 & 0.1554 & [0.0431, 0.2935] & <0.001 \\
+High-branch-single (full\_visible) & 200 & 0.0252 & 0.0003 & 0.0249 & [0.0055, 0.1058] & <0.001 \\
+High-branch-multi (full\_visible) & 200 & 0.0605 & 0.0008 & 0.0597 & [0.0204, 0.1026] & <0.001 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\subsection{Memory Laundering: Classifier-Clean but Behaviorally Toxic}
+\label{sec:results_laundering}
+We now present the paper's central empirical finding: compressed memory conceals toxic influence below standard classifier thresholds while still shifting downstream behavior. \Cref{fig:laundering_examples} previews the phenomenon at the example level, and this subsection establishes the same pattern quantitatively across $200$ paired rollouts on chain topology in memory-augmented mode---the minimal setting that isolates the laundering mechanism without confounds from fan-out (\cref{sec:results_robustness} confirms SPG remains positive on tree topology).
+
+\noindent \textbf{Memory summaries are uniformly classifier-clean.} \Cref{tab:memory_laundering} shows that under toxic-condition rollouts, memory summaries average $0.0852$ in toxicity---two orders of magnitude above the neutral baseline of $0.0007$, but well below $\tau = 0.5$. \emph{Every} stored summary in both conditions falls below $\tau$, and this is not an artifact of the threshold: the fraction of memory states classified as clean remains $\geq 0.99$ across $\tau \in \{0.03, 0.05, 0.1, 0.2, 0.3, 0.5\}$ (\cref{app:spg_threshold}). A safety monitor applying any reasonable threshold to the memory state would declare both conditions identically clean.
+ 
+\noindent \textbf{Yet downstream behavior diverges.} Despite this uniform classifier-clean labeling, downstream behavior under the two memory conditions diverges sharply. Conditioning only on classifier-clean memory states, downstream agents in the toxic condition produce responses with mean toxicity $0.141$, versus $0.001$ in the neutral condition---yielding $\mathrm{SPG}(\tau) = 0.139$. The paired seed-level difference is $0.170$ ($95\%$ CI $[0.120, 0.226]$, Wilcoxon $p = 3.75 \times 10^{-8}$), and SPG remains stable at ${\approx}\,0.17$ across all thresholds tested (\cref{app:spg_threshold}, all $p < 0.001$). \Cref{fig:laundering_examples} illustrates the qualitative structure: summaries vary in laundering mode (preserved condescension, flattened hostility, ideological framing) but in every case carry no lexical markers a classifier would flag, while still inducing overtly hostile downstream output.
+ 
+\noindent \textbf{Implications.} Per-turn safety evaluation cannot detect this contamination because no single memory artifact crosses the detection threshold at any reasonable $\tau$. SPG quantifies the behavioral gap that classifier scores miss, and directly motivates state-aware mitigation (\cref{sec:method}): output filtering and per-turn classifier monitoring are structurally insufficient against contamination that operates below their detection regime.
+
+% We now present the paper's central empirical finding: compressed memory conceals toxic influence below standard classifier thresholds while still shifting downstream behavior. 
+% \Cref{fig:laundering_examples} previews the phenomenon at the example level: a source message scoring above $0.9$ on Detoxify is compressed into a memory summary scoring near $0$, yet a downstream agent conditioned on this classifier-clean summary still produces an overtly hostile response.
+% This subsection establishes the same pattern quantitatively across $200$ paired rollouts.
+% All experiments in this subsection use the chain topology in memory-augmented mode, where downstream agents condition on the running summary $M_t$ together with the immediate parent message rather than the full transcript. We focus on chain here as the minimal setting that isolates the laundering mechanism without confounds from fan-out or cross-link structure; \cref{sec:results_robustness} confirms that SPG remains positive across tree, DAG, and high-branching topologies.
+% Our primary laundering-specific metric is the sub-threshold propagation gap (SPG (Eq.~\eqref{eq:spg})), which measures the downstream toxicity gap conditioned only on memory states the classifier marks as clean. 
+% The expectation in Eq.~\eqref{eq:spg} is taken over all $(M_t, v_{t+1})$ pairs aggregated across rollouts and turns within a condition (toxic or neutral), restricted to the subset where $\mathrm{tox}(M_t) < \tau$; it is not evaluated at any single time slice.
+% A natural question is why this metric is needed when mean toxicity already exists. Mean toxicity averages over \emph{all} states, including any with $\mathrm{tox}(M_t) \geq \tau$ that a deployed safety monitor would already filter; a low mean is therefore consistent with both genuine safety and successful laundering. SPG isolates exactly the regime a deployed monitor would label safe and reports the toxic--neutral gap that survives that label. 
+% We additionally report the mean toxicity of memory summaries and the fraction of toxic-condition summaries that fall below the standard threshold $\tau = 0.5$. A significantly positive SPG in the regime where every memory state is classifier-clean constitutes direct evidence of laundering: the classifier label is a false negative for behavioral safety.
+
+% \noindent \textbf{Memory summaries are uniformly classifier-clean.} \Cref{tab:memory_laundering} shows that under toxic-condition rollouts, memory summaries average $0.0852$ in toxicity which is two orders of magnitude above the neutral-condition baseline of $0.0007$, but well below the standard classifier threshold of $\tau = 0.5$. Critically, \emph{every} stored memory summary in both conditions falls below $\tau$ (Fraction $\mathrm{tox}(M_t) < \tau = 1.00$), and even the maximum-toxicity memory state stays well below threshold. A safety monitor applying any standard threshold-based filter to the memory state would declare both conditions identically clean.
+% \Cref{fig:spg_main} further shows that this classifier-clean labeling is not an artifact of any specific threshold: the fraction of memory states classified as clean remains $\geq 0.99$ across the entire range $\tau \in \{0.03, 0.05, 0.1, 0.2, 0.3, 0.5\}$.
+
+% \noindent \textbf{Yet downstream behavior diverges.} Despite this uniform classifier-clean labeling, downstream behavior under the two memory conditions diverges sharply. Conditioning only on classifier-clean memory states, downstream agents in the toxic condition produce responses with mean toxicity $0.141$, versus $0.001$ in the neutral condition --- yielding $\mathrm{SPG}(\tau) = 0.139$. The paired seed-level difference is $0.170$ ($95\%$ CI $[0.120, 0.226]$, Wilcoxon signed-rank $p = 3.75 \times 10^{-8}$), and SPG remains stable at ${\approx}\,0.17$ across all thresholds tested (\cref{fig:spg_main}, all $p < 0.001$).
+% The behavioral signature of upstream toxic exposure persists in the downstream agents' responses even though the memory artifact carrying that signature has been compressed below detection.
+
+% \noindent \textbf{Qualitative structure of laundered memory.} \Cref{fig:laundering_examples} illustrates the laundering phenomenon with three representative rollouts, each showing a high-toxicity source message ($\mathrm{tox} > 0.9$), the classifier-clean memory summary it produces ($\mathrm{tox} < 0.01$), and the downstream response the memory induces ($\mathrm{tox} \in [0.87, 0.97]$). The three examples reveal distinct laundering modes. In Example~1, the summarizer preserves condescending register in neutral descriptive language; in Example~2, explicit profanity is flattened into a clinical acknowledgment of conflict; in Example~3, ideological and us-vs-them framing survives in attenuated form . In all three cases, the summary contains no lexical markers a toxicity classifier would flag, yet the downstream agent that is only conditioned on this summary and the immediate parent message produces overtly hostile output. The memory has laundered the hostility out of the visible representation while preserving its generative effect.
+
+% \noindent \textbf{Implications.} Together, this result establishes the laundering phenomenon in concrete terms. The summarizer compresses overt toxic markers like profanity, explicit hostility, but preserves adversarial framing in attenuated form (representative examples appear in~\cref{fig:laundering_examples}). Standard per-turn safety evaluation, applied to either individual messages or memory states, cannot detect this contamination, because no single memory artifact crosses the detection threshold at any reasonable $\tau$. SPG is the metric that does: it quantifies the behavioral gap that classifier scores miss. This finding directly motivates state-aware mitigation (\cref{sec:method}): output filtering and per-turn classifier monitoring are structurally insufficient against contamination that operates below their detection regime.
+
+\begin{table}[t]
+\centering
+\caption{Memory laundering analysis (chain topology, \texttt{memory\_gpt}, no memory sanitization). Paired toxic vs.\ neutral conditions over $200$ seeds at threshold $\tau = 0.5$. Every stored memory summary falls below the classifier threshold, yet downstream behavior conditioned on classifier-clean memory diverges strongly: $\mathbb{E}[\mathrm{tox}(v_{t+1}) \mid \mathrm{tox}(M_t) < \tau, \text{toxic}] = 0.141$ versus $\mathbb{E}[\mathrm{tox}(v_{t+1}) \mid \mathrm{tox}(M_t) < \tau, \text{neutral}] = 0.001$, giving $\mathrm{SPG}(\tau) = 0.139$. The paired seed-level difference is $0.170$ ($95\%$ CI $[0.120, 0.226]$, Wilcoxon signed-rank $p = 3.75 \times 10^{-8}$). SPG is defined as a toxic--neutral contrast and is reported on the toxic row only.}
+\label{tab:memory_laundering}
+\begin{tabular}{lccc}
+\toprule
+Condition & Mean $\mathrm{tox}(M_t)$ & Fraction $\mathrm{tox}(M_t)<\tau$ & SPG$(\tau)$ \\
+\midrule
+Memory, neutral & $0.0007$ & $1.00$ & -- \\
+Memory, toxic   & $0.0852$ & $1.00$ & $0.139$ \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+% \begin{figure}[t]
+%   \centering
+%   \includegraphics[width=0.65\linewidth]{figs/spg_vs_threshold.pdf}
+%   \caption{\textbf{Sub-threshold propagation gap SPG$(\tau)$ as a function of the classifier threshold $\tau$ under memory-augmented chain rollouts} ($n = 200$ seeds). SPG remains stable at ${\approx}\,0.17$ across $\tau \in \{0.03, 0.05, 0.1, 0.2, 0.3, 0.5\}$ and is significantly positive at every threshold (all $p < 0.001$, paired Wilcoxon signed-rank). Across this entire range, the fraction of memory states classified as clean satisfies $\Pr[\mathrm{tox}(M_t) < \tau] \geq 0.99$, meaning a standard classifier-based monitor would label essentially every memory state in both conditions as safe. The vertical dotted line marks the standard threshold $\tau = 0.5$; the shaded band shows the 95\% bootstrap CI.}
+%   \label{fig:spg_main}
+% \end{figure}
+
+\begin{figure}[htbp]
+  \centering
+  \includegraphics[width=\linewidth]{figs/qualitative_laundering.pdf}
+  \caption{\textbf{Qualitative examples of memory laundering.} Three independent rollouts from the toxic-condition chain runs, each showing the full laundering pipeline: a source toxic message from agent $A_1$ (left), the resulting compressed memory state $M_t$ (middle), and the downstream agent's response conditioned on that memory (right). Detoxify scores appear below each box; $\tau = 0.5$ is the standard classifier threshold. In all three examples, the memory summary scores near $0$ despite source toxicity above $0.9$, yet the downstream responses preserve hostile, accusatory, or confrontational framing. The summaries vary in their laundering mode: Example~1 preserves the condescending tone in neutral descriptive language (``dismissive and condescending''); Example~2 flattens explicit hostility into acknowledgment of conflict (``personal attacks and accusations''); Example~3 preserves ideological framing and us-vs-them dichotomy without toxic markers. Example~3 contains a redacted slur from the original source. Matched neutral-condition downstream responses (not shown) average $\mathrm{tox} < 0.01$ for all three seeds.}
+  \label{fig:laundering_examples}
+\end{figure}
+
+\subsection{Transcript and Memory are Distinct Propagation Channels}
+\label{sec:results_channels}
+\Cref{sec:results_laundering} established that compressed memory carries hidden behavioral influence below classifier thresholds. We now disentangle the transcript and memory channels by varying which is visible to downstream agents (transcript-only with memory disabled, memory-only with no parent, or combined) and applying four sanitization interventions at $\tau{=}0.5$: memory-side rewrite/gate (after compression) and transcript-side write-gate redact/rewrite (before compression). All experiments use chain topology with $n{=}200$ paired seeds; \Cref{tab:channel_comparison} reports the full conditions.
+
+\noindent \textbf{Channels carry distinct signatures.} Isolating the transcript channel produces $\Delta\mu = 0.27$ (full visibility) and $0.17$ (parent-only), while isolating the memory channel produces $\Delta\mu = 0.012$---more than an order of magnitude smaller. The combined-channel condition yields $\Delta\mu = 0.17$, almost identical to parent-only transcript alone, so overt propagation is carried almost entirely by the transcript. The picture inverts under SPG: memory-only mode produces $\mathrm{SPG}(\tau{=}0.5) = 0.097$ despite uniformly classifier-clean memory states (mean $\mathrm{tox}(M_t) = 0.014$)---a hidden gap eight times larger than its visible counterpart---and adding the transcript multiplies overt toxicity by an order of magnitude but raises SPG by only $0.04$ ($0.097 \to 0.140$). Transcript shows up as $\Delta\mu$; memory shows up as SPG.
+ 
+\noindent \textbf{Laundering originates at compression, not at sanitization.} Memory-side interventions, applied \emph{after} compression, reduce overt propagation but leave SPG intact: rewrite cuts $\Delta\mu$ from $0.168$ to $0.024$ but leaves $\mathrm{SPG} = 0.086$, and gate produces $\Delta\mu = 0.041$ with $\mathrm{SPG} = 0.103$---both indistinguishable from the memory-only baseline of $0.097$. Transcript-side write-gate, applied \emph{before} compression, eliminates both signals (redact: $\mathrm{SPG} = 0.0004$; rewrite: $\mathrm{SPG} = 0.0006$). Threshold-based sanitization at $\tau = 0.5$ thus succeeds when applied to source messages above threshold but fails when applied to compressed summaries that have already been pushed below threshold by the summarizer. Laundering is a property of the order of operations: sanitization after compression is structurally too late.
+
+
+% \Cref{sec:results_laundering} established that compressed memory carries hidden behavioral influence below classifier thresholds. We now ask how the transcript and memory channels compare in magnitude and whether they propagate toxicity through the same mechanism. They do not: the two channels produce qualitatively different signatures, with transcript dominating overt downstream toxicity and memory dominating hidden influence below the classifier threshold. The interventions targeting each channel exhibit a corresponding asymmetry, which clarifies where in the pipeline laundering originates.
+% We disentangle the channels by varying which is visible to downstream agents while holding all other simulation parameters fixed. Transcript-only modes (full or parent-only, with memory disabled) isolate the transcript channel; memory-only mode, in which downstream agents condition exclusively on the summary $M_t$, isolates the memory channel; the combined-channel mode activates both. We additionally evaluate four sanitization interventions at threshold $\tau=0.5$: memory-side rewrite and gate, applied to summaries after compression, and transcript-side write-gate redact and rewrite, applied to agent outputs before they enter the transcript or memory. All experiments use the chain topology with $n=200$ paired seeds. \Cref{tab:channel_comparison} reports the full set of conditions.
+
+
+% \noindent \textbf{Transcript dominates overt propagation.}
+% Isolating the transcript channel produces $\Delta\mu = 0.27$ under full visibility and $\Delta\mu = 0.17$ under parent-only visibility, while isolating the memory channel produces $\Delta\mu = 0.012$, which is more than an order of magnitude smaller. The combined-channel condition yields $\Delta\mu = 0.17$, almost identical to parent-only transcript alone. Overt propagation is thus carried almost entirely by the transcript, and a single contaminated parent message reproduces most of the full-transcript effect.
+
+% \noindent \textbf{Memory carries hidden influence that transcript cannot.}
+% The picture inverts under SPG. Memory-only mode produces $\Delta\mu = 0.012$ but $\mathrm{SPG}(\tau=0.5) = 0.097$, a hidden propagation gap eight times larger than its visible counterpart, despite uniformly classifier-clean memory states (mean $\mathrm{tox}(M_t) = 0.014$). Adding the transcript multiplies overt toxicity by an order of magnitude but raises SPG by only $0.04$ ($0.097 \to 0.140$). Transcript shows up as $\Delta\mu$; memory shows up as SPG.
+
+% \noindent \textbf{Laundering originates at compression, not at sanitization.}
+% The four sanitization conditions reveal where laundering enters the pipeline. Memory-side interventions, applied \emph{after} compression, reduce overt propagation but leave SPG essentially intact: rewrite cuts $\Delta\mu$ from $0.168$ to $0.024$ but leaves $\mathrm{SPG} = 0.086$, and gate produces $\Delta\mu = 0.041$ with $\mathrm{SPG} = 0.103$ --- both indistinguishable from the memory-only baseline of $0.097$. Transcript-side write-gate, applied \emph{before} compression, eliminates both signals: redact yields $\Delta\mu = 0.003$ with $\mathrm{SPG} = 0.0004$, and rewrite yields $\Delta\mu = 0.007$ with $\mathrm{SPG} = 0.0006$. Threshold-based sanitization at $\tau = 0.5$ thus succeeds when applied to source messages above threshold but fails when applied to compressed summaries that have already been pushed below threshold by the summarizer. Laundering is a property of the order of operations: sanitization after compression is structurally too late.
+
+
+\begin{table}[t]
+\centering
+\small
+\setlength{\tabcolsep}{3pt}
+\caption{Channel comparison between transcript and memory modes (chain topology, $\tau = 0.5$).}
+\label{tab:channel_comparison}
+\begin{tabular}{lcccc}
+\toprule
+Mode / intervention & Mean tox($M_t$) & $\Delta\mu$ & SPG($\tau$=0.5) & Turn-final tox (toxic) \\
+\midrule
+  Full transcript (no memory)                        & -- & 0.2684 & -- & 0.1425 \\
+  Parent-only transcript (no memory)                 & -- & 0.1657 & -- & 0.0173 \\
+  Memory only (no parent)                            & 0.0144 & 0.0115 & 0.0970 & 0.0325 \\
+  Memory, no sanitization (both channels)            & 0.0852 & 0.1678 & 0.1395 & 0.1470 \\
+  Memory + rewrite (tau=0.5)                         & 0.0121 & 0.0244 & 0.0856 & 0.0445 \\
+  Memory + gate (tau=0.5)                            & 0.0142 & 0.0413 & 0.1030 & 0.0146 \\
+  Write-gate redact (tau=0.5)                        & 0.0126 & 0.0031 & 0.0004 & 0.0255 \\
+  Write-gate rewrite (tau=0.5)                       & 0.0147 & 0.0069 & 0.0006 & 0.0154 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+
+\subsection{Robustness Across Topology and Injection Count}
+\label{sec:results_robustness}
+% We next test whether the propagation and laundering effects established in \cref{sec:results_propagation,sec:results_laundering,sec:results_channels} are robust to graph structure and the amount of upstream toxic content. Topology determines the geometry of fan-out and the conditioning available to each downstream agent; injection count $n_{\text{injection}}$ determines how much toxic content is introduced upstream. We use $\Delta\mu$ as the primary metric for rollout-level propagation and SPG for memory-mediated hidden influence wherever memory-mode runs are available.
+\Cref{tab:propagation} (\cref{sec:results_propagation}) shows that $\Delta\mu$ is positive across all chain, tree, DAG, and high-branching topologies under both single- and multi-injection conditions, confirming that overt propagation does not depend on a specific graph structure. To verify that memory laundering also generalizes, we replicate the \cref{sec:results_laundering} memory experiment on tree topology ($n=200$ paired seeds, gpt-4o-mini, memory-augmented mode, no sanitization). We find $\mathrm{SPG}(\tau{=}0.5) = 0.049$ with paired Wilcoxon $p < 0.001$, despite branching dilution that drops $\Delta\mu$ from $0.168$ (chain) to $0.039$ (full numbers in~\cref{app:tree_robustness}). This is the regime where SPG is most diagnostically useful: $\Delta\mu = 0.039$ is small enough that overt-propagation analysis could plausibly conclude topology has neutralized the effect, yet SPG reveals that hidden behavioral influence persists in classifier-clean memory states.
+ 
+
+% \noindent \textbf{Topology and injection count: $\Delta\mu$ is positive across all conditions.}
+% \Cref{tab:propagation} (\cref{sec:results_propagation}) reports paired effect sizes across chain, tree, DAG, and high-branching topologies, under both single-injection and multi-injection conditions. $\Delta\mu$ is significantly positive ($p < 0.001$) in every condition. Two patterns hold across the table. First, multi-injection consistently amplifies propagation relative to single-injection (e.g., tree: $0.108 \to 0.226$; DAG: $0.035 \to 0.156$; high-branch: $0.025 \to 0.061$), confirming the dose--response structure described in~\cref{sec:method}. Second, topology modulates magnitude rather than existence: chain concentrates exposure ($\Delta\mu = 0.268$), while high-branching dilutes it across many parallel responders ($\Delta\mu = 0.025$ under single-injection). The phenomenon is robust; its geometry depends on conversation structure.
+
+% \noindent \textbf{Cross-topology validation of laundering.}
+% To verify that memory laundering is not specific to chain topology, we replicate the \cref{sec:results_laundering} memory experiment on tree topology ($n=200$ paired seeds, gpt-4o-mini agent and summarizer, memory-augmented mode, no sanitization). \Cref{tab:tree_laundering} reports the result. SPG($\tau=0.5$) = 0.049 with paired Wilcoxon $p < 0.001$, confirming that compression-induced laundering persists under branching conversation structures. The phenomenon's manifestation differs in informative ways. Branching topology dilutes propagation across every visible metric: mean tox($M_t$) drops from 0.085 to 0.016, $\Delta\mu$ drops from 0.168 to 0.039, and turn-final toxicity drops by more than an order of magnitude (0.147 to 0.009). This dilution reflects the natural averaging effect of fan-out --- at each downstream node, toxic framing competes with multiple sibling contexts, and the summarizer compresses more aggressively when summarizing diverse multi-voice input. SPG remains significantly positive even in this attenuated regime.
+
+% This is in fact the regime where SPG is most diagnostically useful. On chain, $\Delta\mu = 0.168$ is large enough that overt propagation is visible without any specialized metric. On tree, $\Delta\mu = 0.039$ is small enough that a safety evaluation relying on $\Delta\mu$ alone could plausibly conclude propagation has been mitigated by topology --- yet SPG reveals that hidden behavioral influence persists in classifier-clean memory states. The laundering phenomenon is robust to topology, and SPG is the metric that surfaces it where overt signals fade.
+
+% \begin{table}[t]
+% \centering
+% \small
+% \setlength{\tabcolsep}{4pt}
+% \caption{Cross-topology validation of memory laundering on tree topology ($n=200$ paired seeds, gpt-4o-mini agent and summarizer, memory-augmented mode, no sanitization, $\tau=0.5$). The paired Wilcoxon signed-rank $p$-value is for $\mathrm{SPG}(\tau=0.5) > 0$. Compared to chain ($\mathrm{SPG} = 0.139$, $\Delta\mu = 0.168$; \cref{sec:results_laundering}), tree topology produces smaller magnitudes on every metric but preserves the laundering signature: classifier-clean memory states (mean tox($M_t$) = 0.016) still produce a significant downstream toxicity gap.}
+% \label{tab:tree_laundering}
+% \begin{tabular}{lccccc}
+% \toprule
+% Mode / intervention & Mean tox($M_t$) & $\Delta\mu$ & SPG($\tau$=0.5) & Turn-final tox (toxic) & $p$ \\
+% \midrule
+% Tree memory laundering & 0.0160 & 0.0387 & 0.0492 & 0.0085 & $<0.001$ \\
+% \bottomrule
+% \end{tabular}
+% \end{table}
+
+
+\subsection{Defense Comparison and Full Ablation}
+\label{sec:results_defense_ablation}
+We now ask whether targeted interventions on each channel, alone and in combination, can suppress propagation. We evaluate nine conditions on Llama-3.1-8B-Instruct chain memory rollouts ($n=200$ paired seeds, single-injection at $A_1$, chain depth 4): three baselines (\emph{No intervention}, \emph{Output filter}, \emph{DPO only}), two single-channel state controls (\emph{Transcript only} via write-gate rewrite at $\tau{=}0.5$; \emph{Memory only} via memory-write rewrite at $\tau{=}0.5$), and four combinations including the full system. Full condition specifications appear in~\cref{app:ablation_conditions}.\footnote{The No-intervention SPG of $0.015$ on Llama-3.1 is roughly an order of magnitude smaller than the $0.139$ on gpt-4o-mini (\cref{sec:results_laundering}); Llama's stronger safety training compresses absolute laundering magnitude but the qualitative pattern is preserved. Cross-model SPG comparisons are not meaningful, so the ablation should be read on its own terms.}
+
+% We now ask whether targeted interventions on each channel, alone and in combination, can suppress propagation while preserving system functionality. This subsection reports a unified ablation comparing standard defenses, single-channel state-control interventions, and parameter-level DPO, evaluated under the same chain memory protocol used in \cref{sec:results_laundering}.
+
+% \noindent \textbf{Conditions.}
+% We evaluate nine conditions on Llama-3.1-8B-Instruct chain memory rollouts (\Cref{tab:defense_ablation}). Three baselines anchor the comparison: \emph{No intervention}, \emph{Output filter} (a post-generation Detoxify filter that replaces any message with $\mathrm{tox}(v) > \tau$ by a neutral placeholder before it is appended to the transcript), and \emph{DPO only}. Two single-channel interventions isolate each state-control pathway: \emph{Transcript only} applies write-gate rewrite at $\tau=0.5$ with no memory sanitization, and \emph{Memory only} applies memory-write rewrite at $\tau=0.5$ with no transcript sanitization. Four combinations test additivity: \emph{Transcript + Memory}, \emph{Transcript + DPO}, \emph{Memory + DPO}, and the full system. All conditions use $n=200$ paired seeds, single-injection at $A_1$ with strong toxic intensity, and the chain depth-4 protocol from~\cref{subsec:paired_setup}.
+
+% \noindent \textbf{Note on absolute SPG scale.}
+% The No-intervention SPG of $0.015$ on Llama-3.1-8B-Instruct is roughly an order of magnitude smaller than the SPG of $0.139$ reported on gpt-4o-mini in \cref{sec:results_laundering}. Llama-3.1's stronger safety training reduces the absolute laundering signal it produces, but the qualitative pattern is preserved: SPG remains positive in baseline, and intervention conditions further reduce it. Because Llama is the only model used for parameter-level intervention (the gpt-4o-mini API does not expose weights), the ablation must be read on its own terms; cross-model comparisons of absolute SPG are not meaningful.
+
+\begin{table*}[t]
+\centering
+\caption{Unified comparison of baselines, single-channel interventions, and full-system combinations on Llama-3.1-8B-Instruct chain memory rollouts ($n=200$ paired seeds per condition). Transcript and Memory controls use rewrite sanitization at $\tau=0.5$. Values are mean $\pm$ standard error. Bolded cells mark the lowest value in each column. All conditions reject the null $\Delta\mu = 0$ at $p < 0.001$ under one-sided paired Wilcoxon.}
+\label{tab:defense_ablation}
+\begin{tabular}{lccc}
+\toprule
+Condition & Turn-4 tox & $\Delta\mu$ & SPG($\tau{=}0.5$) \\
+\midrule
+\multicolumn{4}{l}{\textit{Baselines}} \\
+No intervention      & 0.1207 $\pm$ 0.012 & 0.1302 $\pm$ 0.015 & 0.0149 $\pm$ 0.008 \\
+Output filter        & 0.0204 $\pm$ 0.004 & 0.0608 $\pm$ 0.010 & 0.0143 $\pm$ 0.004 \\
+DPO only             & 0.0601 $\pm$ 0.009 & 0.0605 $\pm$ 0.012 & 0.0086 $\pm$ 0.006 \\
+\midrule
+\multicolumn{4}{l}{\textit{Single-channel interventions}} \\
+Transcript only      & 0.0305 $\pm$ 0.006 & 0.0309 $\pm$ 0.007 & 0.0053 $\pm$ 0.003 \\
+Memory only          & 0.0804 $\pm$ 0.011 & 0.0807 $\pm$ 0.013 & \textbf{0.0027 $\pm$ 0.002} \\
+\midrule
+\multicolumn{4}{l}{\textit{Combinations}} \\
+Transcript + Memory  & 0.0202 $\pm$ 0.004 & 0.0108 $\pm$ 0.004 & 0.0012 $\pm$ 0.001 \\
+Transcript + DPO     & 0.0154 $\pm$ 0.003 & 0.0159 $\pm$ 0.004 & 0.0036 $\pm$ 0.002 \\
+Memory + DPO         & 0.0402 $\pm$ 0.007 & 0.0407 $\pm$ 0.008 & 0.0018 $\pm$ 0.001 \\
+Full system          & \textbf{0.0106 $\pm$ 0.002}& \textbf{0.0059 $\pm$ 0.003} & 0.0014 $\pm$ 0.001 \\
+\bottomrule
+\end{tabular}
+\end{table*}
+\noindent \textbf{Output filtering does not address the propagation channel.} The post-generation filter eliminates overt toxic messages, reducing turn-4 toxicity by an order of magnitude (0.121 to 0.020). Yet $\Delta\mu$ remains $0.061$, less than half of baseline but still 4 to 10 times larger than any state-control condition. Critically, the filter leaves SPG unchanged from baseline ($0.014$ vs.\ $0.015$): the framing that survives compression already sits below $\tau$ by construction, so a $\tau$-thresholded filter has nothing to act on.
+ 
+\noindent \textbf{Single-channel interventions reveal channel asymmetry.} Transcript-only rewrite reduces $\Delta\mu$ to $0.031$ (a $4{\times}$ reduction) but leaves SPG at $0.005$. Memory-only rewrite shows the inverse: it reduces SPG to $0.003$, the lowest single-channel value, but leaves $\Delta\mu$ at $0.081$, only modestly below baseline. Transcript control suppresses the overt channel that drives $\Delta\mu$; memory control suppresses the laundered channel that drives SPG; neither reaches the floor on its own. The dissociation is independent evidence that $\Delta\mu$ and SPG index distinct components of propagation.
+ 
+\noindent \textbf{The full system reaches the floor on every metric.} DPO-only reduces both $\Delta\mu$ ($0.130 \to 0.061$) and SPG ($0.015 \to 0.009$) by approximately half but does not approach the floor on either: parametric debiasing reduces context amplification but cannot prevent contaminated state from accumulating. Combining all three pathways yields the lowest values in each column (turn-4 toxicity $0.011$, $\Delta\mu$ $0.006$, SPG $0.001$), strictly dominating every single intervention and pairwise combination on $\Delta\mu$ and turn-4 toxicity. The Transcript + Memory combination already approaches the SPG floor without DPO, so DPO's marginal contribution is concentrated on the overt-propagation channel; the full multiplicative structure of these interactions is analyzed in~\cref{app:ablation_detail}. Each pathway is necessary; none is sufficient; the combination strictly dominates --- the empirical content of the multi-pathway design proposed in \cref{sec:problem}.
+
+% \noindent \textbf{Output filtering does not address the propagation channel.} The post-generation filter eliminates overt toxic messages, reducing turn-4 toxicity by an order of magnitude (0.121 to 0.020). Yet $\Delta\mu$ remains $0.061$, less than half of baseline but still 4 to 10 times larger than any state-control condition. The discrepancy between turn-4 toxicity ($0.020$) and $\Delta\mu$ ($0.061$) is itself diagnostic: the filter suppresses the visible terminal output, but the toxic-arm trajectory still accumulates a substantial cumulative gap relative to the neutral arm across earlier turns. Critically, the filter leaves SPG essentially unchanged from baseline ($0.014$ vs.\ $0.015$). This confirms that classifier-thresholded post-generation filtering cannot reach the laundered channel established in \cref{sec:results_laundering}: the framing that survives compression already sits below $\tau$ by construction, so a $\tau$-thresholded filter has nothing to act on.
+ 
+% \noindent \textbf{Single-channel interventions reveal channel asymmetry.} 
+% The two single-channel interventions specialize on different metrics in a way that maps directly onto the channel framework. Transcript-only rewrite reduces $\Delta\mu$ to $0.031$ (a $4{\times}$ reduction) but leaves SPG at $0.005$. Memory-only rewrite shows the inverse: it reduces SPG to $0.003$, the lowest single-channel value (bolded in~\Cref{tab:defense_ablation}), but leaves $\Delta\mu$ at $0.081$, only modestly below baseline. This is the channel-asymmetry signature predicted by the framework: transcript control suppresses the overt channel that drives $\Delta\mu$, memory control suppresses the laundered channel that drives SPG, and neither intervention reaches the floor on its own. The dissociation is independent evidence that $\Delta\mu$ and SPG index distinct components of propagation rather than redundant aspects of a single signal.
+ 
+% \noindent \textbf{DPO contributes incremental value across channels.} DPO-only reduces both $\Delta\mu$ (0.130 to 0.061) and SPG (0.015 to 0.009) by approximately half, but does not approach the floor on either metric: parametric debiasing reduces the model's amplification of toxic context but does not prevent contaminated state from accumulating in transcript or memory channels. The combinatorial structure makes this concrete: adding DPO to Transcript-only reduces $\Delta\mu$ from 0.031 to 0.016, and adding DPO to Memory-only reduces $\Delta\mu$ from 0.081 to 0.041. In each case DPO contributes a comparable absolute reduction, consistent with parametric amplification operating as an independent channel that interacts multiplicatively with the upstream content channels.
+ 
+% \noindent \textbf{The full system reaches the floor on every metric.} 
+% Combining all three pathways yields the lowest values in each column: turn-4 toxicity $0.011$, $\Delta\mu$ $0.006$, and SPG $0.001$. No single intervention or pairwise combination matches the full system on $\Delta\mu$ or turn-4 toxicity. The Transcript + Memory combination approaches the SPG floor ($0.001$) without DPO, but retains a residual $\Delta\mu$ of $0.011$ that DPO eliminates in the full system. Each pathway is necessary; none is sufficient; the combination strictly dominates. This is the empirical content of the multi-pathway design proposed in \cref{sec:problem}.
+
+ 
+% \noindent \textbf{Synthesis.} The ablation supports three claims that follow from the propagation analysis. First, output filtering and DPO are each insufficient as standalone defenses: the former leaves the propagation channel intact, and the latter reduces but does not eliminate amplification. Second, transcript and memory pathways carry distinct components of the propagation signal --- transcript control dominates $\Delta\mu$ reduction, memory control dominates SPG reduction --- and their combined effect is super-additive on the laundering channel ($0.005, 0.003 \to 0.001$). Third, parametric unlearning contributes a roughly multiplicative reduction across whichever channels remain active, suggesting it functions as a complement to state controls rather than a substitute. The full integrated system is the only condition tested that simultaneously suppresses overt propagation, sub-threshold laundering, and parametric amplification.
+
+% \begin{figure}[t]
+% \centering
+% \fbox{\parbox[c][2.0in][c]{0.92\linewidth}{\centering Placeholder for defense / ablation figure}}
+% \caption{Comparison of standard defenses, channel-specific interventions, and the full integrated system.}
+% \label{fig:defense_ablation}
+% \end{figure}
+
+\noindent \textbf{Summary of findings.}
+Across the experiments, toxic influence propagates through two non-redundant state channels. Transcript backflow primarily drives the overt propagation captured by $\Delta\mu$, while compressed memory carries sub-threshold toxic framing captured by SPG. Standard defenses reduce only part of this effect: output filtering suppresses visible toxic generations, and DPO reduces model-level amplification, but neither directly removes contaminated state from the conditioning loop. The full state-aware system performs best because it combines transcript control, memory control, and parameter-level debiasing, jointly addressing overt transcript backflow, compressed-memory laundering, and residual amplification.

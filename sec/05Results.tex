@@ -1,0 +1,131 @@
+% \vspace{-6pt}
+\section{Results}
+\label{sec:results}
+We organize results around four questions. We first present the paper's central empirical finding: \emph{memory laundering}, where classifier-clean summaries remain behaviorally toxic. We then disentangle transcript and memory as distinct propagation channels, verify the phenomenon is robust across topology and injection count, and finally evaluate the full channel-aware intervention framework.
+
+\subsection{Memory Laundering: Classifier-Clean but Behaviorally Toxic}
+\label{sec:results_laundering}
+We first establish the paper's central empirical finding: compressed memory can appear safe to a toxicity classifier while still transmitting toxic influence to downstream agents. We evaluate this in the minimal memory-augmented chain setting, using $200$ paired toxic--neutral rollouts with no memory sanitization. This setting isolates the laundering mechanism before introducing fan-out or topology effects; \cref{sec:results_robustness} shows that the same signal persists on tree topology.
+
+\noindent\textbf{Memory summaries are classifier-clean.}
+As shown in \cref{tab:memory_laundering}, toxic-condition memory summaries have mean toxicity $0.0852$, above the neutral baseline of $0.0007$ but far below the standard threshold $\tau=0.5$. 
+Every stored summary in both conditions falls below $\tau$. This is not an artifact of the particular threshold: across $\tau \in \{0.03,0.05,0.1,0.2,0.3,0.5\}$, at least $99\%$ of memory states are classified as clean (\cref{app:spg_threshold}). Thus, a threshold-based monitor applied to memory would label nearly all states in both conditions as safe.
+
+\noindent\textbf{Classifier-clean memory still changes downstream behavior.}
+Despite this clean labeling, downstream agents conditioned on toxic-condition memory produce substantially more toxic responses than those conditioned on matched neutral memory. Among memory states satisfying $\mathrm{tox}(M_t)<\tau$, downstream toxicity is $0.141$ in the toxic condition versus $0.001$ in the neutral condition, giving $\mathrm{SPG}(\tau)=0.140$. At the seed level, the paired difference is $0.168$ ($95\%$ CI $[0.120,0.226]$, Wilcoxon $p=3.75\times10^{-8}$), and SPG remains significantly positive across all thresholds tested (\cref{app:spg_threshold}, all $p<0.001$). \Cref{fig:memory_laundering} gives a representative laundering trace: the source message is overtly toxic, the memory summary falls below the classifier threshold, yet the downstream response remains hostile. Additional qualitative examples appear in \cref{app:laundering_examples}.
+
+\begin{table}[t]
+\centering
+\sffamily
+\small
+\caption{
+Memory laundering on chain topology with memory augmentation and no sanitization. Across $200$ seeds at $\tau=0.5$, all memory summaries are classifier-clean, yet downstream behavior diverges strongly; SPG is shown on the toxic row, with significant paired gap ($p=3.75\times10^{-8}$).
+}
+\label{tab:memory_laundering}
+\begin{tabular}{lccc}
+\toprule
+Condition & Mean $\mathrm{tox}(M_t)$ & Fraction $\mathrm{tox}(M_t)<\tau$ & SPG$(\tau)$ \\
+\midrule
+Memory, neutral & $0.0007$ & $1.00$ & -- \\
+Memory, toxic   & $0.0852$ & $1.00$ & $0.140$ \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\subsection{Transcript and Memory are Distinct Propagation Channels}
+\label{sec:results_channels}
+\begin{table}[t]
+\centering
+\sffamily
+\small
+\setlength{\tabcolsep}{2.5pt}
+\caption{
+Channel comparison between transcript and memory modes on chain topology at $\tau=0.5$. 
+Mean metrics capture average downstream propagation, while $\mathrm{P95}_{tox}$ reports the empirical 95th percentile of downstream message toxicity in the toxic condition. High $\mathrm{P95}_{tox}$ values indicate upper-tail toxic generations that are diluted by benign turns; write-gating generated turns before they are added to transcript and summarized into memory substantially reduces both SPG and tail toxicity.}
+\label{tab:channel_comparison}
+\begin{tabular}{lccccc}
+\toprule
+Mode / intervention
+& Mean tox($M_t$)
+& $\Delta\mu$
+& SPG
+& Turn-final tox
+& P95$_{\text{tox}}$ \\
+\midrule
+Full transcript (no memory)              & --     & 0.2684 & --     & 0.1425 & 0.9348 \\
+Parent-only transcript (no memory)       & --     & 0.1657 & --     & 0.0173 & 0.8969 \\
+Memory only (no parent)                  & 0.0144 & 0.0115 & 0.0970 & 0.0325 & 0.6775 \\
+Memory, no sanitization (both channels)  & 0.0852 & 0.1678 & 0.1395 & 0.1470 & 0.9309 \\
+Memory + rewrite ($\tau=0.5$)            & 0.0121 & 0.0244 & 0.0856 & 0.0445 & 0.4127 \\
+Memory + gate ($\tau=0.5$)               & {0.0142} & 0.0413 & 0.1030 & \textbf{0.0146} & 0.6775 \\
+Write-gate redact ($\tau=0.5$)           & \textbf{0.0126} & \textbf{0.0031} & \textbf{0.0004} & 0.0255 & \textbf{0.2628} \\
+Write-gate rewrite ($\tau=0.5$)          & 0.0147 & 0.0069 & 0.0006 & 0.0154 & 0.2808 \\
+\bottomrule
+\end{tabular}
+\end{table}
+% \Cref{sec:results_laundering} established that compressed memory carries hidden behavioral influence below classifier thresholds. 
+We now disentangle transcript and memory channels by varying downstream visibility: transcript-only with memory disabled, memory-only with no parent message, or combined transcript--memory conditioning. 
+Using chain topology with $n{=}200$ paired seeds, we test four sanitization interventions at $\tau{=}0.5$: summary-level memory rewrite/gate after compression, and transcript write-gate redact/rewrite before generated turns are summarized into memory. 
+\Cref{tab:channel_comparison} reports mean propagation metrics and $\mathrm{P95}_{tox}$, the 95th percentile of downstream message toxicity in the toxic condition.
+
+\noindent \textbf{Channels carry distinct signatures.}
+Transcript exposure primarily drives overt propagation. In transcript-only settings, $\Delta\mu$ is large under full visibility ($0.268$) and parent-only visibility ($0.166$), and the tail remains severe (P95$_{\text{tox}}=0.935$ and $0.897$). By contrast, isolating memory produces a smaller mean shift ($\Delta\mu=0.012$), but a hidden gap: memory-only mode yields $\mathrm{SPG}(\tau{=}0.5)=0.097$ despite uniformly classifier-clean memory states (mean $\mathrm{tox}(M_t)=0.014$), with P95$_{\text{tox}}=0.678$. The combined transcript--memory condition restores large overt propagation ($\Delta\mu=0.168$, P95$_{\text{tox}}=0.931$) while increasing SPG only from $0.097$ to $0.140$. Thus, transcript backflow appears mainly in $\Delta\mu$ and tail toxicity, while compressed memory appears most clearly in SPG.
+
+
+\noindent \textbf{Laundering originates at compression, not at post-hoc sanitization.}
+Summary-level memory controls applied after compression reduce overt toxicity but leave the hidden channel open: rewriting lowers $\Delta\mu$ from $0.168$ to $0.024$ and $\mathrm{P95}_{tox}$ from $0.931$ to $0.413$, yet SPG remains $0.086$; gating similarly leaves SPG at $0.103$. 
+By contrast, transcript write-gating before memory summarization nearly eliminates SPG (redact: $0.0004$; rewrite: $0.0006$) and lowers tail toxicity ($\mathrm{P95}_{tox}=0.263$ and $0.281$). 
+Thus, the issue is not that sanitization fails, but that sanitizing only the completed summary can be too late: toxic framing may already have been compressed below the classifier threshold while remaining behaviorally influential.
+% A natural question is whether memory laundering disappears if every input is sanitized before summarization. Our results suggest that, for the memory-laundering channel, the answer is largely yes: sanitizing generated turns before they are added to transcript and summarized into memory drives SPG nearly to zero. This is precisely the architectural constraint exposed by memory laundering. The risk is not that sanitization cannot work, but that many deployed controls are placed too late---after generation, after storage, or after the memory summary has already compressed toxic framing below the classifier threshold. In those designs, the memory state can appear clean while remaining behaviorally influential.
+
+\subsection{Robustness Across Topology and Injection Count}
+\label{sec:results_robustness}
+We verify that propagation and laundering generalize beyond the chain setting. Across chain, tree, DAG, and high-branching topologies, paired toxic--neutral comparisons show significantly positive downstream propagation in every condition ($p<0.001$; full results in \cref{app:topology_robustness}). Multi-injection consistently amplifies propagation relative to single-injection, while topology modulates magnitude: chain structure concentrates exposure, whereas high branching dilutes it.
+
+To test whether laundering also survives topology changes, we replicate the \cref{sec:results_laundering} memory experiment on tree topology ($n=200$ paired seeds, \texttt{gpt-4o-mini}, memory-augmented mode, no sanitization). Even under branching dilution, classifier-clean memory states remain behaviorally influential: $\mathrm{SPG}(\tau{=}0.5)=0.049$ with paired Wilcoxon $p<0.001$, while overt propagation drops to $\Delta\mu=0.039$ (full numbers in \cref{app:tree_robustness}). This is precisely the regime where SPG is most diagnostic: an analysis based only on $\Delta\mu$ could plausibly conclude that topology has mostly neutralized propagation, while SPG reveals hidden influence persisting inside classifier-clean memory.
+
+\subsection{Defense Comparison and Full Ablation}
+\label{sec:results_defense_ablation}
+We evaluate whether channel-targeted interventions suppress propagation, alone and in combination, using Llama-3.1-8B-Instruct~\citep{llama3modelcard} chain memory rollouts ($n=200$ paired seeds, single-injection at $A_1$, depth 4).
+We compare three baselines (\emph{No intervention}, \emph{Output filter}, \emph{DPO only}), two single-channel state controls (\emph{Transcript only} and \emph{Memory only} at $\tau{=}0.5$), and four combinations including the full system. \Cref{tab:defense_ablation} reports mean propagation metrics with P95$_{\text{tox}}$, the 95th percentile of downstream toxicity in the toxic condition, which captures severe tail generations that can be hidden by low averages. Full condition specifications appear in~\cref{app:ablation_conditions}.
+% \footnote{Llama-3.1 has lower absolute SPG than gpt-4o-mini, likely due to stronger safety training, so cross-model SPG values should not be compared directly; the qualitative laundering pattern is preserved.}
+
+\begin{table*}[t]
+\centering
+\sffamily
+\small
+\caption{
+% Defense ablation on Llama-3.1-8B-Instruct chain memory rollouts ($n=200$ paired seeds). Transcript and Memory controls use rewrite sanitization at $\tau=0.5$. 
+% Values are mean $\pm$ standard error except $\mathrm{P95}_{tox}$, which reports the empirical 95th percentile of toxic-condition downstream message toxicity. Bolded cells mark column minima; all $\Delta\mu$ values are significant at $p<0.001$.
+Defense ablation on Llama-3.1-8B-Instruct chain memory rollouts ($n=200$ paired seeds). Baselines reduce visible toxicity but leave propagation channels open; single-channel controls suppress only part of the problem. Full system achieves lowest turn-final toxicity, $\Delta\mu$, and $\mathrm{P95}_{tox}$, while Transcript+Memory attains lowest SPG. Values are mean $\pm$ standard error except $\mathrm{P95}_{tox}$; bolded cells mark column minima. See \S\ref{app:ablation_detail} for cross-model comparison with the gpt-4o-mini results.
+}
+\label{tab:defense_ablation}
+\begin{tabular}{lcccc}
+\toprule
+Condition & Turn-final tox & P95$_{\text{tox}}$ & $\Delta\mu$ & SPG($\tau{=}0.5$) \\
+\midrule
+% \multicolumn{5}{l}{\textit{Baselines}} \\
+No intervention      & 0.1207 $\pm$ 0.012 & 0.9048 & 0.1302 $\pm$ 0.015 & 0.0149 $\pm$ 0.008 \\
+Output filter        & 0.0204 $\pm$ 0.004 & 0.6514 & 0.0608 $\pm$ 0.010 & 0.0143 $\pm$ 0.004 \\
+DPO only             & 0.0601 $\pm$ 0.009 & 0.7804 & 0.0605 $\pm$ 0.012 & 0.0086 $\pm$ 0.006 \\
+\midrule
+% \multicolumn{5}{l}{\textit{Single-channel interventions}} \\
+Transcript only      & 0.0305 $\pm$ 0.006 & 0.1746 & 0.0309 $\pm$ 0.007 & 0.0053 $\pm$ 0.003 \\
+Memory only          & 0.0804 $\pm$ 0.011 & 0.7628 & 0.0807 $\pm$ 0.013 & 0.0027 $\pm$ 0.002 \\
+\midrule
+% \multicolumn{5}{l}{\textit{Combinations}} \\
+Transcript + Memory  & 0.0202 $\pm$ 0.004 & 0.1374 & 0.0108 $\pm$ 0.004 & \textbf{0.0012 $\pm$ 0.001} \\
+Transcript + DPO     & 0.0154 $\pm$ 0.003 & 0.2030 & 0.0159 $\pm$ 0.004 & 0.0036 $\pm$ 0.002 \\
+Memory + DPO         & 0.0402 $\pm$ 0.007 & 0.4946 & 0.0407 $\pm$ 0.008 & 0.0018 $\pm$ 0.001 \\
+Full system          & \textbf{0.0106 $\pm$ 0.002} &\textbf{ 0.1025} & \textbf{0.0059 $\pm$ 0.003} & 0.0014 $\pm$ 0.001 \\
+\bottomrule
+\end{tabular}
+\end{table*}
+\noindent \textbf{Output filtering does not address the propagation channel.} As shown in \cref{tab:defense_ablation}, the post-generation filter reduces turn-final toxicity by an order of magnitude ($0.121 \to 0.020$), but $\Delta\mu$ remains $0.061$, less than half of baseline yet still above the state-control combinations. It also leaves SPG unchanged from baseline ($0.014$ vs.\ $0.015$), because the framing that survives compression already sits below $\tau$ by construction. The tail statistic where P95$_{\text{tox}}$ remains high under output filtering ($0.651$) shows that severe toxic generations still occur even when the terminal mean is low.
+
+\noindent \textbf{Single-channel interventions reveal channel asymmetry.} Transcript-only rewrite reduces $\Delta\mu$ to $0.031$ and sharply lowers tail toxicity (P95$_{\text{tox}}=0.175$), but leaves SPG at $0.005$. Memory-only rewrite shows the inverse pattern: it reduces SPG to $0.003$, the lowest single-channel value, but leaves $\Delta\mu$ at $0.081$ and P95$_{\text{tox}}$ high ($0.763$). Transcript control suppresses the overt channel that drives $\Delta\mu$ and tail toxicity; memory control suppresses the laundered channel that drives SPG. Neither reaches the floor on its own, proving that $\Delta\mu$, SPG, and P95$_{\text{tox}}$ index complementary aspects of propagation.
+
+\noindent \textbf{The full system reaches the floor on mean and tail metrics.} DPO-only reduces both $\Delta\mu$ ($0.130 \to 0.061$) and SPG ($0.015 \to 0.009$), but it leaves high-percentile toxicity large (P95$_{\text{tox}}=0.780$), consistent with parametric debiasing reducing average amplification without removing contaminated state. Combining all three pathways yields the lowest turn-final toxicity ($0.011$), lowest $\Delta\mu$ ($0.006$), and lowest tail toxicity (P95$_{\text{tox}}=0.103$), while approximately matching the near-floor SPG of the strongest state-only combination. The Transcript + Memory combination already reaches the lowest SPG ($0.0012$), so DPO's marginal contribution is concentrated on overt and tail propagation; the full multiplicative structure is analyzed in~\cref{app:ablation_detail}. Each pathway is necessary; none is sufficient; the combination strictly dominates on the practical toxicity metrics.
+
+\noindent \textbf{Summary of findings.}
+Transcript backflow drives overt propagation captured by $\Delta\mu$ and P95$_{\text{tox}}$, while compressed memory carries sub-threshold influence captured by SPG. Output filtering and DPO reduce visible generations or parametric amplification, but neither removes contaminated state from the loop. The full state-aware system performs best because it jointly addresses transcript backflow, memory laundering, residual amplification, and severe tail generations.

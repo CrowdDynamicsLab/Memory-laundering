@@ -18,13 +18,15 @@
   year={2020},
   url={https://github.com/unitaryai/detoxify}
 }
-@article{chen2024agentpoison,
-  title={Agentpoison: Red-teaming llm agents via poisoning memory or knowledge bases},
-  author={Chen, Zhaorun and Xiang, Zhen and Xiao, Chaowei and Song, Dawn and Li, Bo},
-  journal={Advances in Neural Information Processing Systems},
-  volume={37},
-  pages={130185--130213},
-  year={2024}
+@article{goel2016structural,
+  title={The structural virality of online diffusion},
+  author={Goel, Sharad and Anderson, Ashton and Hofman, Jake and Watts, Duncan J},
+  journal={Management science},
+  volume={62},
+  number={1},
+  pages={180--196},
+  year={2016},
+  publisher={INFORMS}
 }
 @inproceedings{chen2025struq,
   title={$\{$StruQ$\}$: Defending against prompt injection with structured queries},
@@ -47,6 +49,19 @@
   journal={arXiv preprint arXiv:2502.20383},
   year={2025}
 }
+@misc{openai2024gpt4o,
+  title = {GPT-4o Mini},
+  author = {{OpenAI}},
+  year = {2024},
+  howpublished = {\url{https://platform.openai.com/docs/models}},
+  note = {Accessed: 2026-05-03}
+}
+@article{llama3modelcard,
+    title={Llama 3 Model Card},
+    author={AI@Meta},
+    year={2024},
+    url = {https://github.com/meta-llama/llama3/blob/main/MODEL_CARD.md}
+    }
 @article{cohen2024here,
   title={Here comes the ai worm: Unleashing zero-click worms that target genai-powered applications},
   author={Cohen, Stav and Bitton, Ron and Nassi, Ben},
@@ -156,4 +171,234 @@
   volume={36},
   pages={53728--53741},
   year={2023}
+}
+
+@article{wang2025recursively,
+  title={Recursively summarizing enables long-term dialogue memory in large language models},
+  author={Wang, Qingyue and Fu, Yanhe and Cao, Yanan and Wang, Shuai and Tian, Zhiliang and Ding, Liang},
+  journal={Neurocomputing},
+  volume={639},
+  pages={130193},
+  year={2025},
+  publisher={Elsevier}
+}
+
+@inproceedings{wu-etal-2025-incremental,
+    title = "Incremental Summarization for Customer Support via Progressive Note-Taking and Agent Feedback",
+    author = "Wu, Yisha  and
+      Zhao, Cen  and
+      Cao, Yuanpei  and
+      Xu, Xiaoqing  and
+      Mehdad, Yashar  and
+      Ji, Mindy  and
+      Cheng, Claire Na",
+    editor = "Potdar, Saloni  and
+      Rojas-Barahona, Lina  and
+      Montella, Sebastien",
+    booktitle = "Proceedings of the 2025 Conference on Empirical Methods in Natural Language Processing: Industry Track",
+    month = nov,
+    year = "2025",
+    address = "Suzhou (China)",
+    publisher = "Association for Computational Linguistics",
+    url = "https://aclanthology.org/2025.emnlp-industry.140/",
+    doi = "10.18653/v1/2025.emnlp-industry.140",
+    pages = "2000--2015",
+    ISBN = "979-8-89176-333-3",
+    abstract = "We introduce an incremental summarization system for customer support agents that intelligently determines when to generate concise bullet notes during conversations, reducing agents' cognitive load and redundant review. Our approach combines a fine-tuned Mixtral-8{\texttimes}7B model for continuous note generation with a DeBERTa-based classifier to filter trivial content. Agent edits refine the online notes generation and regularly inform offline model retraining, closing the agent edits feedback loop. Deployed in production, our system achieved a 3{\%} reduction in case handling time compared to bulk summarization (with reductions of up to 9{\%} in highly complex cases), alongside high agent satisfaction ratings from surveys. These results demonstrate that incremental summarization with continuous feedback effectively enhances summary quality and agent productivity at scale."
+}
+
+@article{xi2025agentgym,
+  title={Agentgym-rl: Training llm agents for long-horizon decision making through multi-turn reinforcement learning},
+  author={Xi, Zhiheng and Huang, Jixuan and Liao, Chenyang and Huang, Baodai and Guo, Honglin and Liu, Jiaqi and Zheng, Rui and Ye, Junjie and Zhang, Jiazheng and Chen, Wenxiang and others},
+  journal={arXiv preprint arXiv:2509.08755},
+  year={2025}
+}
+
+@article{kulkarni2024reinforcement,
+  title={Reinforcement learning for optimizing rag for domain chatbots},
+  author={Kulkarni, Mandar and Tangarajan, Praveen and Kim, Kyung and Trivedi, Anusua},
+  journal={arXiv preprint arXiv:2401.06800},
+  year={2024}
+}
+
+@article{kagaya2024rap,
+  title={Rap: Retrieval-augmented planning with contextual memory for multimodal llm agents},
+  author={Kagaya, Tomoyuki and Yuan, Thong Jing and Lou, Yuxuan and Karlekar, Jayashree and Pranata, Sugiri and Kinose, Akira and Oguri, Koki and Wick, Felix and You, Yang},
+  journal={arXiv preprint arXiv:2402.03610},
+  year={2024}
+}
+
+@inproceedings{wang-etal-2025-unveiling-privacy,
+    title = "Unveiling Privacy Risks in {LLM} Agent Memory",
+    author = "Wang, Bo  and
+      He, Weiyi  and
+      Zeng, Shenglai  and
+      Xiang, Zhen  and
+      Xing, Yue  and
+      Tang, Jiliang  and
+      He, Pengfei",
+    editor = "Che, Wanxiang  and
+      Nabende, Joyce  and
+      Shutova, Ekaterina  and
+      Pilehvar, Mohammad Taher",
+    booktitle = "Proceedings of the 63rd Annual Meeting of the Association for Computational Linguistics (Volume 1: Long Papers)",
+    month = jul,
+    year = "2025",
+    address = "Vienna, Austria",
+    publisher = "Association for Computational Linguistics",
+    url = "https://aclanthology.org/2025.acl-long.1227/",
+    doi = "10.18653/v1/2025.acl-long.1227",
+    pages = "25241--25260",
+    ISBN = "979-8-89176-251-0",
+    abstract = "Large Language Model (LLM) agents have become increasingly prevalent across various real-world applications. They enhance decision-making by storing private user-agent interactions in the memory module for demonstrations, introducing new privacy risks for LLM agents. In this work, we systematically investigate the vulnerability of LLM agents to our proposed Memory EXTRaction Attack (MEXTRA) under a black-box setting. To extract private information from memory, we propose an effective attacking prompt design and an automated prompt generation method based on different levels of knowledge about the LLM agent. Experiments on two representative agents demonstrate the effectiveness of MEXTRA. Moreover, we explore key factors influencing memory leakage from both the agent designer{'}s and the attacker{'}s perspectives. Our findings highlight the urgent need for effective memory safeguards in LLM agent design and deployment."
+}
+
+@article{shi2024large,
+  title={Large language model safety: A holistic survey},
+  author={Shi, Dan and Shen, Tianhao and Huang, Yufei and Li, Zhigen and Leng, Yongqi and Jin, Renren and Liu, Chuang and Wu, Xinwei and Guo, Zishan and Yu, Linhao and others},
+  journal={arXiv preprint arXiv:2412.17686},
+  year={2024}
+}
+
+@article{chua2024ai,
+  title={Ai safety in generative ai large language models: A survey},
+  author={Chua, Jaymari and Li, Yun and Yang, Shiyi and Wang, Chen and Yao, Lina},
+  journal={arXiv preprint arXiv:2407.18369},
+  year={2024}
+}
+
+@article{Bajaj2026PositionSA,
+  title={Position: Safety and Fairness in Agentic AI Depend on Interaction Topology, Not on Model Scale or Alignment},
+  author={Tanav Singh Bajaj and Nikhil Singh and Karan Anand and Eishkaran Singh},
+  journal={arxiv preprint arXiv:2605.01147},
+  year={2026}
+}
+
+@article{rezazadeh2025collaborative,
+  title={Collaborative memory: Multi-user memory sharing in llm agents with dynamic access control},
+  author={Rezazadeh, Alireza and Li, Zichao and Lou, Ange and Zhao, Yuying and Wei, Wei and Bao, Yujia},
+  journal={arXiv preprint arXiv:2505.18279},
+  year={2025}
+}
+
+@article{gao2024memory,
+  title={Memory sharing for large language model based agents},
+  author={Gao, Hang and Zhang, Yongfeng},
+  journal={arXiv preprint arXiv:2404.09982},
+  year={2024}
+}
+
+@article{yagoubi2026agentleak,
+  title={AgentLeak: A full-stack benchmark for privacy leakage in multi-agent LLM systems},
+  author={Yagoubi, Faouzi El and Badu-Marfo, Godwin and Mallah, Ranwa Al},
+  journal={arXiv preprint arXiv:2602.11510},
+  year={2026}
+}
+
+@article{xu2025mem,
+  title={A-mem: Agentic memory for llm agents},
+  author={Xu, Wujiang and Liang, Zujie and Mei, Kai and Gao, Hang and Tan, Juntao and Zhang, Yongfeng},
+  journal={arXiv preprint arXiv:2502.12110},
+  year={2025}
+}
+
+@article{verma2026active,
+  title={Active Context Compression: Autonomous Memory Management in LLM Agents},
+  author={Verma, Nikhil},
+  journal={arXiv preprint arXiv:2601.07190},
+  year={2026}
+}
+
+@article{bousetouane2026ai,
+  title={AI Agents Need Memory Control Over More Context},
+  author={Bousetouane, Fouad},
+  journal={arXiv preprint arXiv:2601.11653},
+  year={2026}
+}
+
+@article{du2026memory,
+  title={Memory for autonomous LLM agents: Mechanisms, evaluation, and emerging frontiers},
+  author={Du, Pengfei},
+  journal={arXiv preprint arXiv:2603.07670},
+  year={2026}
+}
+
+@inproceedings{park2023generative,
+  title={Generative agents: Interactive simulacra of human behavior},
+  author={Park, Joon Sung and O'Brien, Joseph and Cai, Carrie Jun and Morris, Meredith Ringel and Liang, Percy and Bernstein, Michael S},
+  booktitle={Proceedings of the 36th annual acm symposium on user interface software and technology},
+  pages={1--22},
+  year={2023}
+}
+
+@article{shinn2023reflexion,
+  title={Reflexion: Language agents with verbal reinforcement learning},
+  author={Shinn, Noah and Cassano, Federico and Gopinath, Ashwin and Narasimhan, Karthik and Yao, Shunyu},
+  journal={Advances in neural information processing systems},
+  volume={36},
+  pages={8634--8652},
+  year={2023}
+}
+
+@article{packer2023memgpt,
+  title={MemGPT: towards LLMs as operating systems.},
+  author={Packer, Charles and Fang, Vivian and Patil, Shishir\_G and Lin, Kevin and Wooders, Sarah and Gonzalez, Joseph\_E},
+  year={2023},
+  publisher={ArXiv}
+}
+
+@inproceedings{wu2024autogen,
+  title={Autogen: Enabling next-gen LLM applications via multi-agent conversations},
+  author={Wu, Qingyun and Bansal, Gagan and Zhang, Jieyu and Wu, Yiran and Li, Beibin and Zhu, Erkang and Jiang, Li and Zhang, Xiaoyun and Zhang, Shaokun and Liu, Jiale and others},
+  booktitle={First conference on language modeling},
+  year={2024}
+}
+
+@article{chen2024agentpoison,
+  title={Agentpoison: Red-teaming llm agents via poisoning memory or knowledge bases},
+  author={Chen, Zhaorun and Xiang, Zhen and Xiao, Chaowei and Song, Dawn and Li, Bo},
+  journal={Advances in Neural Information Processing Systems},
+  volume={37},
+  pages={130185--130213},
+  year={2024}
+}
+
+@article{ai2025memorybench,
+  title={MemoryBench: A Benchmark for Memory and Continual Learning in LLM Systems},
+  author={Ai, Qingyao and Tang, Yichen and Wang, Changyue and Long, Jianming and Su, Weihang and Liu, Yiqun},
+  journal={arXiv preprint arXiv:2510.17281},
+  year={2025}
+}
+
+
+
+@article{wang2026causaldetox,
+  title={CausalDetox: Causal Head Selection and Intervention for Language Model Detoxification},
+  author={Wang, Yian and Chen, Yuen and Goyal, Agam and Sundaram, Hari},
+  journal={arXiv preprint arXiv:2604.14602},
+  year={2026}
+}
+
+@inproceedings{goyal-etal-2025-breaking,
+    title = "Breaking Bad Tokens: Detoxification of {LLM}s Using Sparse Autoencoders",
+    author = "Goyal, Agam  and
+      Rathi, Vedant  and
+      Yeh, William  and
+      Wang, Yian  and
+      Chen, Yuen  and
+      Sundaram, Hari",
+    editor = "Christodoulopoulos, Christos  and
+      Chakraborty, Tanmoy  and
+      Rose, Carolyn  and
+      Peng, Violet",
+    booktitle = "Proceedings of the 2025 Conference on Empirical Methods in Natural Language Processing",
+    month = nov,
+    year = "2025",
+    address = "Suzhou, China",
+    publisher = "Association for Computational Linguistics",
+    url = "https://aclanthology.org/2025.emnlp-main.641/",
+    doi = "10.18653/v1/2025.emnlp-main.641",
+    pages = "12691--12709",
+    ISBN = "979-8-89176-332-6",
+    abstract = "Large language models (LLMs) are now ubiquitous in user-facing applications, yet they still generate undesirable toxic outputs, including profanity, vulgarity, and derogatory remarks. Although numerous detoxification methods exist, most apply broad, surface-level fixes and can therefore easily be circumvented by jailbreak attacks. In this paper we leverage sparse autoencoders (SAEs) to identify toxicity-related directions in the residual stream of models and perform targeted activation steering using the corresponding decoder vectors. We introduce three tiers of steering aggressiveness and evaluate them on GPT-2 Small and Gemma-2-2B, revealing trade-offs between toxicity reduction and language fluency. At stronger steering strengths, these causal interventions surpass competitive baselines in reducing toxicity by up to 20{\%}, though fluency can degrade noticeably on GPT-2 Small depending on the aggressiveness. Crucially, standard NLP benchmark scores upon steering remain stable, indicating that the model{'}s knowledge and general abilities are preserved. We further show that feature-splitting in wider SAEs hampers safety interventions, underscoring the importance of disentangled feature learning. Our findings highlight both the promise and the current limitations of SAE-based causal interventions for LLM detoxification, further suggesting practical guidelines for safer language-model deployment."
 }

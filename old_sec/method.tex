@@ -1,0 +1,191 @@
+\section{Method}
+\label{sec:method}
+We present an experimental and intervention framework for analyzing and mitigating toxic state contamination in multi-agent LLM systems.
+\S\ref{subsec:paired_setup} describes the paired counterfactual setup that supports causal attribution of downstream toxicity to upstream injection.
+\S\ref{subsec:framework} introduces the three-pathway mitigation framework, with each subsection targeting one channel from \S\ref{sec:channels}.
+\S\ref{subsec:metrics} defines two metrics, The full simulation environment, model details, prompt templates, and DPO hyperparameters are deferred to~\cref{app:experimental_details}.
+
+
+% ─────────────────────────────────────────────────────
+% 4.1  Paired Counterfactual Setup
+% ─────────────────────────────────────────────────────
+\subsection{Paired Counterfactual Setup}
+\label{subsec:paired_setup}
+
+\paragraph{Paired rollouts.}
+To attribute downstream toxicity changes to a single source, we use \emph{paired} toxic-vs-neutral rollouts that differ only in the focal agent's prompt.
+For each seed post $s$ and graph template $T \in \mathcal{T}$, we fix (i) the topology $G_T$, (ii) a deterministic generation schedule $\pi_T$ (a topological ordering over nodes), (iii) the agent assignment map $\varphi : V \to \mathcal{A}$ specifying which nodes are authored by $A_1$, and (iv) decoding randomness $r$.
+We then generate two paired conversations
+\begin{equation}
+    G^{(\texttt{toxic})}(s, T, r) \quad \text{and} \quad G^{(\texttt{neutral})}(s, T, r),
+    \label{eq:paired}
+\end{equation}
+identical in every way except the system prompt of $A_1$.
+This yields the paired effect size $\Delta\mu(s)$ (Eq.~\eqref{eq:effect_size}, restricted to non-focal nodes as defined in \S\ref{sec:problem}).
+To absorb stochastic decoding, we run $R$ independent rollouts per seed and report mean and worst-case statistics
+\begin{equation}
+    \bar{\mu}(s) = \frac{1}{R}\sum_{i=1}^{R} \mu(G(s, r_i)),
+    \qquad
+    \mu_{\max}(s) = \max_i\, \mu(G(s, r_i)).
+    \label{eq:rollout_stats}
+\end{equation}
+
+\paragraph{Agents.}
+We define three agent types.
+\textbf{Toxic $A_1$} is instructed to respond in a hostile or confrontational manner.
+\textbf{Neutral $A_1$} is instructed to respond constructively and thoughtfully.
+\textbf{Downstream agents} ($A_2, \dots, A_n$) receive a generic ``engaged social media user'' prompt with no toxicity bias.
+This design ensures that any downstream toxicity shift is attributable to upstream exposure rather than to a toxic role prompt applied throughout the graph.
+
+
+\paragraph{Models, scoring, and conditioning modes.}
+Phenomenon experiments use \texttt{gpt-4o-mini}; intervention experiments requiring parameter access (DPO) use \texttt{Llama-3.1-8B-Instruct} via LoRA fine-tuning, with state-level interventions evaluated on both. All message-level toxicity scores use \texttt{Detoxify}~\citep{Detoxify} as $\mathrm{tox}(\cdot) \in [0,1]$. 
+Downstream agents operate in either \emph{full-transcript mode}, conditioning on the visible transcript, or \emph{memory-augmented mode}, conditioning on a running summary $M_t = \mathrm{Summarize}(M_{t-1}, x_{v_{t-1}})$ plus the parent message; memory-augmented mode is the testbed for laundering. As confounders, we vary topology (chain, tree, DAG, high-branching) and context visibility (parent-only, thread-local, full-visible), holding both fixed within each paired comparison. Full configuration, prompts, template construction, and DPO hyperparameters appear in~\cref{app:experimental_details}.
+
+% ═════════════════════════════════════════════════════
+% 4.2  Three-Pathway Mitigation Framework
+% ═════════════════════════════════════════════════════
+\subsection{Three-Pathway Mitigation Framework}
+\label{subsec:framework}
+
+We instantiate the system $(\pi_{\theta'}, S, W)$ from \S\ref{sec:problem} as three interventions, each targeting one channel of toxic persistence.
+Prior toxicity-mitigation work treats sanitization as a one-sided input filter applied before generation; our design is \emph{symmetric} (read \emph{and} write) and \emph{state-aware}, intervening on transcript and memory at multiple points in the observe--generate--update loop.
+This is the architectural novelty of the framework: the placement of $S$ and $W$ relative to memory compression turns out to be the critical degree of freedom (see \S\ref{sec:results}, the order-of-operations result).
+
+% ─────────────────────────────────────────────────────
+\subsubsection{Transcript Control --- Channel (i)}
+\label{subsec:transcript_control}
+This intervention targets transcript backflow. We intervene at two points. 
+\textbf{(1) Read-side sanitization.} Before passing the conditioning set $C(v)$ to the agent, we apply a sanitizer $S$: $\widetilde{C}(v) = S\!\left(C(v)\right)$,
+where $S$ is instantiated in two ways: \emph{redaction} (replace messages with $\mathrm{tox}(v) > \tau$ with the placeholder ``[message removed]'') and \emph{summarization} (rewrite toxic messages via an LLM call that preserves factual content while removing hostile language; trades computational cost for coherence).
+\textbf{(2) Write-side gating.}
+After the agent generates $x_v$, we control what enters the state:
+\begin{equation}
+    \mathrm{state} \leftarrow \mathrm{state} \cup W(x_v,\, \mathrm{tox}(v)),
+    \label{eq:write_gate}
+\end{equation}
+where the gate $W$ either (a) stores the raw message (baseline), (b) replaces it with a placeholder if $\mathrm{tox}(v) > \tau$ (redaction), or (c) rewrites it to remove toxicity while preserving content (rewrite).
+Write-side gating prevents \emph{self-reinfection}: an agent's own toxic output entering the conditioning context for subsequent agents.
+% \paragraph{Read $\times$ write ablation.}
+% We evaluate the full read-side $\times$ write-side cross (sanitization $\in$ \{none, redact, summarize\} crossed with gating $\in$ \{none, redact, rewrite\}), enabling attribution of each side's contribution.
+
+% ─────────────────────────────────────────────────────
+\subsubsection{Memory Control --- Channel (ii)}
+\label{subsec:memory_control}
+
+This intervention targets memory laundering. The summary $M_t$ becomes a contamination vector that evades classifier-based detection (formalized in Eq.~\eqref{eq:laundered}). We intervene on the memory update with two controls.
+\textbf{(1) Memory rewriting.}
+After each update, score the summary.
+If $\mathrm{tox}(M_{t+1}) > \tau$, rewrite via an LLM call that preserves factual content while removing hostile framing:
+\begin{equation}
+    \widetilde{M}_{t+1} = \mathrm{Rewrite}(M_{t+1}) \quad \text{if } \mathrm{tox}(M_{t+1}) > \tau.
+    \label{eq:memory_rewrite}
+\end{equation}
+A subtlety: laundered summaries by definition score \emph{below} $\tau$, so classifier-triggered rewriting will miss exactly the contaminated states that matter most.
+SPG (\S\ref{subsec:metrics}) is precisely the metric that detects what this rewriting threshold cannot.
+\textbf{(2) Memory gating.}
+If the newly generated message is toxic, prevent it from entering the memory:
+\begin{equation}
+    M_{t+1} = M_t \quad \text{if } \mathrm{tox}(v_t) > \tau.
+    \label{eq:memory_gate}
+\end{equation}
+This preserves memory cleanliness at the cost of information loss on gated turns.
+
+% ─────────────────────────────────────────────────────
+\subsubsection{Parameter-Level DPO --- Channel (iii)}
+\label{subsec:param_control}
+This intervention targets the model's tendency to match the register of toxic context.
+Unlike transcript and memory control, which operate on the evolving state, DPO operates on the policy itself, reducing the model's amplification of residual contamination that escapes state-level mitigation.
+
+\paragraph{Counterfactual preference pairs.}
+For each seed $s$ and downstream turn $t$, we extract two responses from the paired rollouts of \S\ref{subsec:paired_setup}: $m_t^{+}$, the response produced in the \emph{neutral} rollout, and $m_t^{-}$, the response produced in the \emph{toxic} rollout. We retain the pair only when $\mathrm{tox}(m_t^{-}) > \mathrm{tox}(m_t^{+})$ under Detoxify. For DPO training, both responses are evaluated against the toxic-rollout context $c_t^{(\texttt{tox})}$:
+% For each seed $s$ and downstream turn $t$, we extract two responses generated during the paired rollouts of \S\ref{subsec:paired_setup}: $m_t^{+}$, the response produced in the \emph{neutral} rollout (where $A_1$ posts neutrally, so the upstream context $c_t^{(\texttt{neu})}$ is also neutral); and $m_t^{-}$, the response produced in the \emph{toxic} rollout (where $A_1$ posts toxically, so the upstream context $c_t^{(\texttt{tox})}$ is contaminated).
+% We retain the pair only when $\mathrm{tox}(m_t^{-}) > \mathrm{tox}(m_t^{+})$ under Detoxify.
+
+% This gives us a behaviorally meaningful preference: $m_t^{+}$ is \emph{what the agent would have said had upstream context been clean}, and $m_t^{-}$ is \emph{what it actually said when context was toxic}.
+% For DPO training, however, we evaluate \emph{both} responses against the toxic-rollout context $c_t^{(\texttt{tox})}$:
+\begin{equation}
+\mathcal{L}_{\mathrm{DPO}}
+=
+-\log \sigma \Big(
+\beta \big(
+\log \pi_\theta(m_t^{+} \mid c_t^{(\texttt{tox})})
+-
+\log \pi_\theta(m_t^{-} \mid c_t^{(\texttt{tox})})
+\big)
+\Big),
+\label{eq:dpo}
+\end{equation}
+% where $\beta > 0$ is a temperature parameter.
+% The reason for evaluating both responses against $c_t^{(\texttt{tox})}$ rather than each against its own context is that we want to teach the model the behavioral lesson \emph{``in the presence of toxic upstream context, prefer the neutral-condition response over the toxic-condition response.''}
+% Training on each response under its own context would only teach the model to imitate downstream agents under matched conditions, which provides no robustness signal against contamination.
+% By contrast, evaluating both against the toxic context creates an explicit preference signal for clean continuations under hostile inputs --- precisely the behavior we want under partial sanitization failures.
+% Implementation uses LoRA on \texttt{Llama-3.1-8B-Instruct} with \texttt{trl.DPOTrainer}; full hyperparameters in~\cref{app:dpo_hparams}.
+where $\beta > 0$ is a temperature parameter. Evaluating both responses against $c_t^{(\texttt{tox})}$ (rather than each against its own context) creates the behavioral lesson \emph{``in the presence of toxic upstream context, prefer the neutral-condition response over the toxic-condition response,''} which is the robustness signal we want under partial sanitization failures; full justification of this design choice appears in~\cref{app:dpo_design}. Implementation uses LoRA on \texttt{Llama-3.1-8B-Instruct} with \texttt{trl.DPOTrainer}; full hyperparameters in~\cref{app:dpo_hparams}.
+ 
+
+\paragraph{Why DPO alone is insufficient.}
+DPO reduces parametric amplification but cannot stop toxic content from entering or re-entering the transcript and memory. If upstream contamination remains in the state, repeated exposure compounds across turns and eventually overwhelms the parametric correction. We therefore treat DPO as complementary to state-level controls, not as a replacement.
+
+\subsubsection{Integration}
+\label{subsec:integration}
+
+The three interventions address distinct channels and no single one suffices: transcript-only leaves compressed memory and parametric amplification unaddressed; memory-only leaves transcript backflow intact; parameter-only leaves the state free to recontaminate future turns.
+At each generation step, the integrated system applies controls in sequence: (a)~\textbf{Read} --- sanitize the transcript context $C(v)$ and the memory state $M_t$; (b)~\textbf{Generate} --- produce a response using the DPO-updated policy conditioned on the sanitized inputs; (c)~\textbf{Write} --- gate or rewrite the generated output before it is appended to the transcript or used to update memory.
+We evaluate the integrated system through a 7-condition ablation (base, each intervention alone, pairwise combinations, full system) to measure both the marginal contribution of each pathway and their joint effect.
+
+\subsection{Evaluation Metrics}
+\label{subsec:metrics}
+We evaluate propagation through two complementary metrics, both introduced in this work.
+
+\noindent \textbf{Primary metric for hidden influence (introduced).}
+The \emph{sub-threshold propagation gap} (SPG) is defined as
+\begin{equation}
+    \mathrm{SPG}(\tau)
+    = \mathbb{E}\!\left[\mathrm{tox}(v_{t+1}) \mid \mathrm{tox}(M_t) < \tau,\, \texttt{toxic}\right]
+    - \mathbb{E}\!\left[\mathrm{tox}(v_{t+1}) \mid \mathrm{tox}(M_t) < \tau,\, \texttt{neutral}\right],
+    \label{eq:spg}
+\end{equation}
+where the expectations are taken over $(M_t, v_{t+1})$ pairs aggregated across rollouts of the indicated condition, restricted to the subset where the memory state is classifier-clean ($\mathrm{tox}(M_t) < \tau$).
+SPG is to our knowledge the first metric defined explicitly on the regime a deployed safety monitor would label safe.
+We introduce it because mean toxicity averages over all states (including any with $\mathrm{tox}(M_t) \geq \tau$ that a real monitor would already filter), so a low mean is consistent with both genuine safety and successful laundering --- SPG separates these.
+A significantly positive SPG provides direct evidence of memory laundering: classifier-clean memory remains behaviorally influential.
+
+\paragraph{Primary metric for overall propagation (introduced).}
+The \emph{paired effect size} $\Delta\mu(s)$ (Eq.~\eqref{eq:effect_size}, defined over non-focal nodes $V \setminus V_{A_1}$) measures the aggregate downstream toxicity shift attributable to upstream exposure, assessed via Wilcoxon signed-rank test across seeds.
+
+% \paragraph{Supporting diagnostics.}
+% We also report descriptive measures.
+% \emph{AUTC} (area under toxicity curve), $\mathrm{AUTC} = \sum_{t=1}^{|V|} \mu_t$ where $\mu_t$ is cumulative mean toxicity through turn $t$, captures persistence over the rollout (adapted from information-cascade analyses, e.g., \citealp{goel2016structural}).
+% \emph{Propagation radius} $g(k) = \mathbb{E}[\mathrm{tox}(v) \mid d(v, A_1) = k]$ quantifies toxicity as a function of graph distance; we adapt the cascade-radius formulation to the toxicity-propagation setting.
+% \emph{Cascade fraction} $p_\tau(G) = |V|^{-1}\sum_v \mathbb{I}[\mathrm{tox}(v) > \tau]$ measures the share of nodes exceeding threshold. \emph{Time-to-first-toxic} (TTFT) is the earliest turn at which a generated message exceeds $\tau$, adapted from epidemiological time-to-event analyses. These are descriptive: they characterize the geometry and persistence of propagation but do not by themselves demonstrate laundering; SPG remains the laundering-specific metric.
+
+\paragraph{Baselines.}
+To our knowledge, no prior published method targets multi-agent state-channel toxicity propagation as a coordinated problem. We compare against three deployed paradigms: per-turn output filtering with Detoxify at $\tau{=}0.5$, DPO alone, and memory-only sanitization, all evaluated within the unified ablation in~\cref{sec:results_defense_ablation}.
+ 
+
+
+
+% \subsection{Robustness Axes}
+% \label{subsec:robustness_axes}
+
+% To verify that the observed effects are not artifacts of any single interaction structure, we vary two dimensions of the simulation as confounders held fixed within paired comparisons but varied across conditions: (a)~\textbf{topology} --- chain, balanced tree, cross-linked DAG, and high-branching graph structures (full template construction in~\cref{app:templates}); and (b)~\textbf{context visibility} --- parent-only ($C(v) = \{x_{\mathrm{parent}(v)}\}$), thread-local (predecessors in the same branch), and full-visible (all messages generated before $v$).
+% ; and (c)~\textbf{dose} --- toxicity intensity of $A_1$ (mild/medium/strong) and population dose via the number $n_{\mathrm{inject}} \in \{1, 2, 3\}$ and placement strategy (earliest, evenly spaced, random) of toxic injections.
+% Within each paired comparison, all three axes are held identical across the toxic and neutral rollouts; variation across conditions is used solely as a robustness check.
+
+
+% \paragraph{Memory module.}
+% \label{subsec:memory_module}
+% To study hidden influence through compressed state, downstream agents may operate under a memory-augmented mode in which they condition on a running summary $M_t$ together with the immediate parent message, rather than the full transcript.
+% The summary is updated each turn:
+% \begin{equation}
+%     M_{t+1} = \mathrm{Summarize}(M_t, x_{v_t}).
+%     \label{eq:memory_update}
+% \end{equation}
+% Under \emph{full-transcript mode}, agents condition on the visible transcript according to the topology-specific rule.
+% Under \emph{memory-augmented mode}, agents condition on $M_t$ plus the parent.
+% Memory-augmented mode is the testbed for laundering: a summary may appear classifier-clean while still preserving framing that shifts downstream behavior.
+% \paragraph{Section summary.}
+% We have specified a paired counterfactual setup that supports causal attribution of downstream toxicity to a single upstream injection, and instantiated the three-pathway framework of \S\ref{sec:problem} as transcript control ($S, W$ on the raw transcript), memory control (rewriting and gating on compressed summaries), and DPO (parameter-level update with counterfactual preference pairs).
+% SPG and $\Delta\mu$ serve as the two primary metrics --- one for hidden, classifier-evading influence, the other for aggregate propagation --- with cascade-style diagnostics as supporting measures.
+% The next section reports results, organized to directly test (a) whether propagation occurs, (b) whether laundering occurs, (c) which channels carry it, and (d) whether the integrated three-pathway intervention closes them more effectively than any single component.
